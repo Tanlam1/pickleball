@@ -225,6 +225,19 @@ function rememberRoom(id){
   r.last = id;
   try{ localStorage.setItem(LS_ROOMS, JSON.stringify(r)); }catch(e){}
 }
+/* Xoá sạch mọi thứ app đã lưu trên máy này. Không đụng tới dữ liệu trên server. */
+function wipeLocal(){
+  const keys = [];
+  try{
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(k && (k.indexOf(LS_ROOM) === 0 || k === LS_ROOMS || k === LS_V3 || k === LS_V2)) keys.push(k);
+    }
+    keys.forEach(k => localStorage.removeItem(k));
+  }catch(e){}
+  return keys.length;
+}
+
 function forgetRoom(id){
   const r = rooms();
   r.list = r.list.filter(x => x !== id);
@@ -384,7 +397,7 @@ const hasResults = s =>
 
 root.PBStore = {
   state: S, data, load, save, saveLocal, applyRemote, isApplying, fix,
-  rooms, rememberRoom, forgetRoom, legacy, dropLegacy,
+  rooms, rememberRoom, forgetRoom, wipeLocal, legacy, dropLegacy,
   normPlayer, normRoster, normTeamSet, normCfg, normSession,
   today, normDate, showDate,
   roster, teamSet, session, teamSetsOn, sessionsOn, teamSetOf, rosterOf,

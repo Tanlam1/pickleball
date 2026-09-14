@@ -17,6 +17,7 @@ const W_RATING  = 14;        // lệch tổng rating, bình phương
 const W_OVERGAP = 600;       // vượt ngưỡng lệch tối đa
 const SEEDS     = 24;        // số lần xáo ngẫu nhiên mỗi vòng, mỗi lần đều được tinh chỉnh
 const SWEEPS    = 40;        // số vòng tinh chỉnh tối đa
+const ATTEMPTS  = 8;         // số lần dựng lại cả lịch, giữ lịch tốt nhất
 
 function newId(pre){ return (pre || 'p') + Math.random().toString(36).slice(2, 10); }
 
@@ -179,14 +180,7 @@ function commit(matches, ctx){
   return resting;
 }
 
-/* teams = [{ id, name, p1, p2 }] với p1/p2 là object người chơi.
-   cfg   = { courts, minGames, maxGames, cap, maxGap, ignoreRating } */
-function generate(teams, cfg){
-  const list = cfg.cap ? teams.slice(0, cfg.cap) : teams;
-  const dropped = teams.filter(t => list.indexOf(t) === -1);
-  if(list.length < 2)
-    return { error: 'Cần ít nhất 2 đội có đủ cả 2 người được tick "Chơi".' };
-
+function buildSchedule(list, cfg){
   const ctx = { teams: list, cfg, games: {}, rest: {}, met: {}, last: {} };
   list.forEach(t => { ctx.games[t.id] = 0; ctx.rest[t.id] = 0; });
 
@@ -204,7 +198,46 @@ function generate(teams, cfg){
     stall = progressed ? 0 : stall + 1;
     if(stall >= 3) break;
   }
-  return { ctx, rounds, cfg, list, dropped };
+  return { ctx, rounds };
+}
+
+/* Chấm điểm CẢ lịch, theo đúng thứ tự ưu tiên (thiếu trận > lặp > liên tiếp > lệch trình).
+   Các bậc cách nhau đủ xa để tiêu chí trên luôn quyết định trước. */
+function scheduleScore(rounds, ctx, list, cfg){
+  let rep = 0, back = 0, gapSum = 0;
+  Object.keys(ctx.met).forEach(k => { if(ctx.met[k] > 1) rep += ctx.met[k] - 1; });
+  let prev = {};
+  rounds.forEach(rd => {
+    const now = {};
+    rd.matches.forEach(m => {
+      gapSum += gap(m);
+      [m.t1, m.t2].forEach(t => { now[t.id] = true; if(prev[t.id]) back++; });
+    });
+    prev = now;
+  });
+  const short = list.reduce((s, t) => s + Math.max(0, cfg.minGames - ctx.games[t.id]), 0);
+  return short * 1e9 + rep * 1e6 + back * 1e3 + gapSum;
+}
+
+/* teams = [{ id, name, p1, p2 }] với p1/p2 là object người chơi.
+   cfg   = { courts, minGames, maxGames, cap, maxGap, ignoreRating } */
+function generate(teams, cfg){
+  const list = cfg.cap ? teams.slice(0, cfg.cap) : teams;
+  const dropped = teams.filter(t => list.indexOf(t) === -1);
+  if(list.length < 2)
+    return { error: 'Cần ít nhất 2 đội có đủ cả 2 người được tick "Chơi".' };
+
+  /* Xếp tuần tự từng vòng là tham lam: đôi khi các vòng đầu dùng hết cặp đẹp rồi
+     vòng cuối kẹt, sinh ra một cặp lặp không đáng có. Dựng cả lịch nhiều lần rồi
+     giữ lịch tốt nhất sẽ loại được phần lớn những trường hợp đó. */
+  let best = null, bestS = Infinity;
+  for(let a = 0; a < ATTEMPTS; a++){
+    const r = buildSchedule(list, cfg);
+    const s = scheduleScore(r.rounds, r.ctx, list, cfg);
+    if(s < bestS){ bestS = s; best = r; }
+    if(bestS < 1e3) break;                 // đã hoàn hảo: không thiếu trận, không lặp, không liên tiếp
+  }
+  return { ctx: best.ctx, rounds: best.rounds, cfg, list, dropped };
 }
 
 /* ============================ LƯU TRỮ ============================ */

@@ -115,9 +115,11 @@ async function main(){
   /* ---------------- 4. ghi dữ liệu hợp lệ ---------------- */
   begin('Ghi dữ liệu hợp lệ');
   const now = new Date().toISOString();
+  /* Đúng bộ field mà app đẩy lên — nếu Rules trên Firebase còn cũ thì bước này sẽ bắt được */
   const goodDoc = {
     fields: {
       rosters:   { arrayValue: { values: [] } },
+      teamSets:  { arrayValue: { values: [] } },
       sessions:  { arrayValue: { values: [] } },
       updatedBy: { stringValue: 'check-firebase' },
       updatedAt: { timestampValue: now },
@@ -132,9 +134,10 @@ async function main(){
     const j = await r.json().catch(() => ({}));
     const msg = (j.error && j.error.message) || '';
     if(r.status === 403)
-      fail('Rules từ chối cả dữ liệu hợp lệ.',
-        'Firestore Database > tab Rules: dán ĐÚNG nội dung file firestore.rules rồi bấm Publish',
-        'Chú ý dán cả dòng rules_version ở đầu file');
+      fail('Rules từ chối dữ liệu mà app đẩy lên — nhiều khả năng Rules trên Firebase còn là bản cũ.',
+        'Mở firestore.rules trong thư mục dự án, copy TOÀN BỘ',
+        'Firebase Console > Firestore Database > tab Rules > xoá hết, dán vào > Publish',
+        'Đợi ~10 giây rồi chạy lại script này');
     if(!r.ok) fail(`Ghi thất bại (${r.status}): ${msg}`);
   }
   pass();

@@ -909,6 +909,14 @@ $('btnShare').onclick = async () => {
   try{ await navigator.clipboard.writeText(url); toast('Đã copy link mời'); }
   catch(e){ prompt('Gửi link này cho cả nhóm:', url); }
 };
+$('btnWipeLocal').onclick = () => {
+  const n = PBStore.rooms().list.length;
+  if(!confirm(`Xoá toàn bộ dữ liệu app đã lưu trên máy này (cache của ${n} nhóm + danh sách nhóm gần đây)?\n\nDữ liệu trên server KHÔNG bị ảnh hưởng — vào lại nhóm bằng mã là tải về được.`)) return;
+  PBSync.disconnect();
+  PBStore.wipeLocal();
+  location.hash = '';
+  location.reload();
+};
 
 /* ============================ KHỞI ĐỘNG ============================ */
 if(!PBSync.configured()){

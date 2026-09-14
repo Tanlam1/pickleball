@@ -727,22 +727,20 @@ $('sheetClear').onclick = () => {
 
 /* ============================ ĐỒNG BỘ ============================ */
 const STATUS = {
-  off:        'Ngoại tuyến — dữ liệu chỉ lưu trên máy này',
   connecting: 'Đang kết nối…',
-  error:      'Lỗi',
+  error:      'Mất kết nối',
+  off:        'Chưa kết nối',
 };
 
 function setStatus(st, msg){
   const on = st === 'live';
-  $('led').className = 'led ' + (on ? 'live' : (STATUS[st] && st !== 'off' ? st : ''));
+  $('led').className = 'led ' + (on ? 'live' : (st === 'connecting' ? 'connecting' : st === 'error' ? 'error' : ''));
   $('statusText').innerHTML = on
-    ? `<b>Đang đồng bộ</b> · phòng <b>${esc(currentRoom)}</b>`
-    : esc((STATUS[st] || STATUS.off) + (msg ? ' — ' + msg : ''));
-  $('btnJoin').classList.toggle('hide', on);
-  $('btnLeave').classList.toggle('hide', !on);
-  $('btnShare').classList.toggle('hide', !on);
-  $('roomId').disabled  = on || st === 'connecting';
-  $('btnJoin').disabled = st === 'connecting';
+    ? 'Đang đồng bộ — mọi thay đổi hiện ngay với cả nhóm.'
+    : esc((STATUS[st] || STATUS.off) + (msg ? ' — ' + msg : '') +
+          '. Vẫn dùng được bình thường, dữ liệu lưu trên máy.');
+  $('btnReconnect').classList.toggle('hide', on || st === 'connecting');
+  $('btnShare').disabled = !on;
 }
 
 function normRoom(s){
@@ -758,41 +756,115 @@ function applyRemote(d){
   toast('Có cập nhật từ thành viên khác');
 }
 
-async function join(silent){
-  const id = normRoom($('roomId').value);
-  if(!id){ toast('Mã phòng: 3–32 ký tự, chữ thường / số / gạch ngang'); return; }
-  currentRoom = id;
+/* ---------------- cổng vào ---------------- */
+let pendingRoom = null;               // nhóm đang chờ, để nút "dùng dữ liệu đã lưu" biết vào nhóm nào
 
-  let remote;
-  try{ remote = await PBSync.connect(id, applyRemote, setStatus); }
-  catch(e){ currentRoom = null; return; }        // setStatus đã hiện lý do
-
-  if(remote){
-    const nr = (remote.rosters || []).length, ns = (remote.sessions || []).length;
-    if(!silent && !confirm(`Phòng "${id}" đã có ${nr} danh sách người chơi và ${ns} buổi trận.\n\nTải về máy? Dữ liệu hiện có trên máy bạn sẽ bị thay thế.`)){
-      PBSync.disconnect();
-      currentRoom = null;
-      return;
+function gateMsg(html, offlineFor){
+  $('gateErr').innerHTML = html;
+  $('gateMsg').className = 'gmsg' + (html ? ' bad' : ' hide');
+  pendingRoom = offlineFor || null;
+  $('gateOfflineWrap').classList.toggle('hide', !offlineFor);
+}
+function gateClear(){ gateMsg(''); }
+$('btnOffline').onclick = () => { if(pendingRoom) openApp(pendingRoom, true); };
+function gateBusy(on){
+  $('btnEnter').disabled = on;
+  $('gateRoom').disabled = on;
+  $('btnEnter').textContent = on ? 'Đang kết nối…' : 'Vào nhóm';
+}
+function renderGate(){
+  const r = PBStore.rooms();
+  if(r.last) $('gateRoom').value = r.last;
+  $('gateRecent').classList.toggle('hide', !r.list.length);
+  $('gateList').innerHTML = r.list.map(id =>
+    `<div class="growl"><button class="grow" data-room="${esc(id)}">${esc(id)}</button>` +
+    `<button class="icon danger" data-forget="${esc(id)}" title="Xoá khỏi danh sách">✕</button></div>`).join('');
+}
+$('gateList').addEventListener('click', e => {
+  const f = e.target.closest('[data-forget]');
+  if(f){
+    if(confirm(`Xoá nhóm "${f.dataset.forget}" khỏi danh sách trên máy này?\n\nDữ liệu trên server vẫn còn, vào lại bằng mã là có.`)){
+      PBStore.forgetRoom(f.dataset.forget);
+      renderGate();
     }
-    PBStore.applyRemote(remote);
-    render();
-    toast(`Đã vào phòng ${id}`);
-  }else{
-    PBStore.save(true);                          // phòng mới: đẩy dữ liệu đang có lên
-    toast(`Đã tạo phòng ${id}`);
+    return;
   }
-  location.hash = 'room=' + id;
-  setStatus('live');
+  const b = e.target.closest('[data-room]');
+  if(b){ $('gateRoom').value = b.dataset.room; enterRoom(b.dataset.room); }
+});
+$('btnEnter').onclick = () => enterRoom($('gateRoom').value);
+$('gateRoom').addEventListener('keydown', e => { if(e.key === 'Enter') $('btnEnter').click(); });
+
+/* Dữ liệu cũ nằm ngoài mọi nhóm -> hỏi có đưa vào nhóm vừa tạo không */
+function importLegacy(id){
+  const L = PBStore.legacy();
+  if(!L) return;
+  if(confirm(`Máy này còn dữ liệu cũ chưa thuộc nhóm nào: ${L.rosters.length} danh sách người chơi, ${L.sessions.length} buổi trận.\n\nĐưa vào nhóm "${id}" vừa tạo?`))
+    PBStore.applyRemote(L);
+  PBStore.dropLegacy();
 }
 
-$('btnJoin').onclick = () => join(false);
-$('roomId').addEventListener('keydown', e => { if(e.key === 'Enter') join(false); });
-$('btnLeave').onclick = () => {
+async function enterRoom(raw){
+  const id = normRoom(raw);
+  if(!id){
+    gateMsg('Mã nhóm cần 3–32 ký tự, chỉ gồm chữ thường, số và dấu gạch ngang.');
+    return;
+  }
+  gateBusy(true);
+  gateClear();
+
+  const cached = PBStore.load(id);     // nạp cache của nhóm này (có thể rỗng)
+
+  let remote = null;
+  try{
+    remote = await PBSync.connect(id, applyRemote, setStatus);
+  }catch(e){
+    gateBusy(false);
+    gateMsg(`Không vào được nhóm <b>${esc(id)}</b>.<br>${esc(String((e && (e.code || e.message)) || e))}`,
+            cached ? id : null);
+    return;
+  }
+
+  if(remote) PBStore.applyRemote(remote);
+  else       importLegacy(id);         // nhóm mới toanh
+
+  openApp(id);
+  if(!remote) PBStore.save(true);      // đẩy dữ liệu khởi tạo lên cho nhóm mới
+  toast(remote ? `Đã vào nhóm ${id}` : `Đã tạo nhóm ${id}`);
+}
+
+function openApp(id, offline){
+  currentRoom = id;
+  PBStore.rememberRoom(id);
+  gateBusy(false);
+  $('gate').classList.add('hide');
+  $('drawerRoom').textContent = id;
+  if(offline) setStatus('error', 'chưa kết nối được');
+  location.hash = 'room=' + id;
+  render();
+}
+
+$('btnSwitch').onclick = () => {
   PBSync.disconnect();
   currentRoom = null;
+  setDrawer(false);
+  closeSheet();
   history.replaceState(null, '', location.pathname + location.search);
-  setStatus('off');
-  toast('Đã ngắt đồng bộ — dữ liệu vẫn còn trên máy');
+  renderGate();
+  gateClear();
+  $('gate').classList.remove('hide');
+};
+$('btnReconnect').onclick = () => {
+  if(!currentRoom) return;
+  const id = currentRoom;
+  setDrawer(false);
+  PBSync.connect(id, applyRemote, setStatus)
+    .then(remote => {
+      if(remote){ PBStore.applyRemote(remote); render(); }
+      else PBStore.save(true);
+      toast('Đã kết nối lại');
+    })
+    .catch(() => toast('Vẫn chưa kết nối được'));
 };
 $('btnShare').onclick = async () => {
   const url = location.origin + location.pathname + '#room=' + currentRoom;
@@ -801,21 +873,19 @@ $('btnShare').onclick = async () => {
 };
 
 /* ============================ KHỞI ĐỘNG ============================ */
-const hadData = PBStore.load();
-if(!hadData){
-  SAMPLE.forEach(s => addPlayer(s[0], s[1], s[2]));   // lần đầu mở: có sẵn dữ liệu để thử
-  PBStore.saveLocal();
-}
-render();
-
 if(!PBSync.configured()){
+  /* Chưa cấu hình Firebase: không có khái niệm nhóm, chạy thẳng ở chế độ một máy. */
+  PBStore.load('_local');
+  $('gate').classList.add('hide');
   $('syncBox').innerHTML =
     '<p class="dstatus">Chưa cấu hình Firebase — app chạy ngoại tuyến, dữ liệu chỉ lưu trên máy này. ' +
     'Xem <b>FIREBASE.md</b> để bật đồng bộ nhóm.</p>';
+  render();
 }else{
-  setStatus('off');
+  renderGate();
   const m = /room=([a-z0-9-]+)/i.exec(location.hash);
-  if(m){ $('roomId').value = m[1]; join(true); }      // mở bằng link mời -> vào thẳng
+  if(m) enterRoom(m[1]);               // mở bằng link mời -> vào thẳng, bỏ qua cổng
+  else $('gateRoom').focus();
 }
 
 })();

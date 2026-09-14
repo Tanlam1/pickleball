@@ -9,6 +9,35 @@
 </head>
 <body>
 
+<!-- ============ CỔNG VÀO: BẮT BUỘC CHỌN NHÓM ============ -->
+<div class="gate" id="gate">
+  <div class="gbox">
+    <div class="glogo">🏓</div>
+    <h1>Chia trận Pickleball</h1>
+    <p class="gsub">Nhập mã nhóm để vào. Cả nhóm dùng chung một mã sẽ thấy cùng dữ liệu, cập nhật ngay tức thì.</p>
+
+    <label for="gateRoom">Mã nhóm</label>
+    <input type="text" id="gateRoom" placeholder="vd: cmc-pickleball"
+           autocomplete="off" spellcheck="false" autocapitalize="off" enterkeyhint="go">
+    <button class="primary gbtn" id="btnEnter">Vào nhóm</button>
+
+    <div class="gmsg hide" id="gateMsg">
+      <div id="gateErr"></div>
+      <div class="actions hide" id="gateOfflineWrap">
+        <button id="btnOffline">Dùng dữ liệu đã lưu của nhóm này</button>
+      </div>
+    </div>
+
+    <div class="grecent hide" id="gateRecent">
+      <div class="glabel">Nhóm gần đây</div>
+      <div id="gateList"></div>
+    </div>
+
+    <p class="ghint">Mã nhóm đóng vai trò như mật khẩu chung: ai biết mã thì xem và sửa được dữ liệu
+      của nhóm. Nên đặt mã khó đoán một chút, ví dụ <code>cmc-pkb-2026-x7q</code>.</p>
+  </div>
+</div>
+
 <header class="topbar">
   <button class="icon" id="btnMenu" aria-label="Mở menu">
     <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
@@ -35,14 +64,14 @@
   </button>
 
   <div class="dsync" id="syncBox">
-    <label>Đồng bộ nhóm — mã phòng</label>
-    <input type="text" id="roomId" placeholder="vd: cmc-pickleball" autocomplete="off" spellcheck="false">
-    <div class="drow">
-      <button class="primary" id="btnJoin">Kết nối</button>
-      <button id="btnShare" class="hide">Link mời</button>
-      <button id="btnLeave" class="hide">Ngắt</button>
-    </div>
+    <div class="glabel">Nhóm hiện tại</div>
+    <div class="droom" id="drawerRoom">—</div>
     <p class="dstatus" id="statusText"></p>
+    <div class="drow">
+      <button id="btnShare">Link mời</button>
+      <button id="btnReconnect" class="hide">Kết nối lại</button>
+      <button id="btnSwitch">Đổi nhóm</button>
+    </div>
   </div>
 </nav>
 <div class="scrim" id="scrim"></div>

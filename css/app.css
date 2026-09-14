@@ -45,6 +45,29 @@ button.icon{display:grid;place-items:center;padding:0;width:40px;height:40px;
 button.icon.sq{background:var(--panel);border-color:var(--border);flex:none}
 button.icon.danger{color:var(--err)}
 
+/* ---------------- cổng vào (bắt buộc chọn nhóm) ---------------- */
+.gate{position:fixed;inset:0;z-index:100;background:var(--bg);overflow-y:auto;
+  display:flex;align-items:center;justify-content:center;
+  padding:24px 18px calc(24px + env(safe-area-inset-bottom))}
+.gbox{width:100%;max-width:400px}
+.glogo{font-size:40px;line-height:1;margin-bottom:10px}
+.gbox h1{font-size:24px;margin:0 0 6px}
+.gsub{color:var(--muted);font-size:14px;margin:0 0 22px}
+.gbox label{margin-bottom:6px}
+.gbox input[type=text]{padding:12px;font-size:16px;font-weight:600}
+.gbtn{width:100%;margin-top:10px;min-height:48px;font-size:15px}
+.gmsg{margin-top:14px;padding:11px 13px;border-radius:9px;font-size:13.5px;line-height:1.5}
+.gmsg.bad{background:var(--warn-bg);color:var(--warn-fg);border:1px solid var(--warn-bd)}
+.gmsg .actions{margin-top:10px}
+.glabel{font-size:11px;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px}
+.grecent{margin-top:26px}
+.growl{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.grow{flex:1;text-align:left;font-weight:600;padding:11px 13px;min-height:44px}
+.ghint{font-size:12.5px;color:var(--muted);margin:26px 0 0;line-height:1.55}
+.ghint code{background:var(--panel);border:1px solid var(--border);
+  border-radius:5px;padding:1px 5px;font-size:12px}
+
 /* ---------------- topbar ---------------- */
 .topbar{position:fixed;top:0;left:0;right:0;height:var(--topbar);z-index:40;
   display:flex;align-items:center;gap:6px;padding:0 8px 0 4px;
@@ -75,8 +98,9 @@ button.icon.danger{color:var(--err)}
 .dnav.on{background:color-mix(in srgb,var(--accent) 11%,transparent);color:var(--accent)}
 .dnav.on .di{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 .dsync{margin-top:auto;padding:16px 18px 0;border-top:1px solid var(--border)}
-.dsync .drow{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
-.dsync .drow button{flex:1;padding:8px 10px;font-size:13.5px}
+.dsync .drow{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.dsync .drow button{flex:1 1 auto;padding:8px 10px;font-size:13.5px}
+.droom{font-size:16px;font-weight:800;word-break:break-all;margin-bottom:4px}
 .dstatus{font-size:12.5px;color:var(--muted);margin:10px 0 0;line-height:1.45}
 .dstatus b{color:var(--fg)}
 

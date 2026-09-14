@@ -134,9 +134,10 @@ Vài phút sau vào `https://<username>.github.io/pickleball/`.
 
 | Việc | Cách làm |
 |---|---|
-| Lập phòng cho CLB | Nhập mã phòng bất kỳ → **Kết nối**. Chưa có thì app tự tạo bằng dữ liệu đang có trên máy bạn. |
-| Mời cả nhóm | Bấm **Copy link mời** → dán vào group chat. Ai mở link sẽ tự vào phòng. |
-| Tạm tách ra làm riêng | Bấm **Ngắt**. Dữ liệu vẫn còn trên máy, chỉ không đồng bộ nữa. |
+| Lập nhóm cho CLB | Mở app → nhập mã nhóm bất kỳ → **Vào nhóm**. Chưa có thì app tự tạo. |
+| Mời cả nhóm | ☰ → **Link mời** → dán vào group chat. Ai mở link sẽ vào thẳng nhóm. |
+| Đổi sang nhóm khác | ☰ → **Đổi nhóm**. Mỗi nhóm có cache riêng nên dữ liệu không lẫn. |
+| Mất mạng | Nếu đã từng vào nhóm đó, chọn **dùng dữ liệu đã lưu**. Sửa bình thường, rồi ☰ → **Kết nối lại**. |
 
 Mã phòng hợp lệ: 3–32 ký tự, chữ thường / số / dấu gạch ngang. App tự chuẩn hoá (`CMC Pickleball!!` → `cmc-pickleball`).
 

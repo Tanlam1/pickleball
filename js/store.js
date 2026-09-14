@@ -3,11 +3,16 @@
 (function (root) {
 'use strict';
 
-const LS     = 'pb_v3';
-const LS_OLD = 'pb_scheduler_v2';          // bản một-danh-sách trước đây
+/* Mỗi nhóm có cache riêng: pb_room_<mã nhóm>. Không dùng chung một chỗ lưu nữa
+   để dữ liệu các nhóm không lẫn vào nhau khi đổi qua lại. */
+const LS_ROOM  = 'pb_room_';
+const LS_ROOMS = 'pb_rooms';               // danh sách nhóm gần đây + nhóm dùng lần cuối
+const LS_V3    = 'pb_v3';                  // bản chưa có nhóm (một máy một dữ liệu)
+const LS_V2    = 'pb_scheduler_v2';        // bản một-danh-sách trước nữa
 
 const S = {
-  rosters:  [],      // [{ id, name, players:[{id,name,gender,rating,active}] }]
+  roomId:   null,    // mã nhóm đang mở ('_local' khi chưa cấu hình Firebase)
+  rosters:  [],      // [{ id, name, players:[...], teams:[...] }]
   sessions: [],      // [{ id, name, rosterId, cfg, playerIds, rounds, createdAt }]
   view:     'players',
   rosterId: null,
@@ -107,8 +112,9 @@ function normSession(s){
 function data(){ return { rosters: S.rosters, sessions: S.sessions }; }
 
 function saveLocal(){
+  if(!S.roomId) return;
   try{
-    localStorage.setItem(LS, JSON.stringify({
+    localStorage.setItem(LS_ROOM + S.roomId, JSON.stringify({
       rosters: S.rosters, sessions: S.sessions,
       rosterId: S.rosterId, sessionId: S.sessionId, view: S.view,
     }));
@@ -121,30 +127,69 @@ function save(now){
   if(!applying && root.PBSync) PBSync.push(data(), now);
 }
 
-/* Trả về true nếu tìm thấy dữ liệu đã lưu (để app biết có cần nạp dữ liệu mẫu không) */
-function load(){
-  let d = null, found = false;
-  try{ d = JSON.parse(localStorage.getItem(LS) || 'null'); }catch(e){}
+/* Nạp cache của một nhóm. Trả về true nếu máy này đã có dữ liệu của nhóm đó. */
+function load(roomId){
+  S.roomId    = roomId;
+  S.rosters   = [];
+  S.sessions  = [];
+  S.rosterId  = null;
+  S.sessionId = null;
+  S.view      = 'players';
 
+  let d = null;
+  try{ d = JSON.parse(localStorage.getItem(LS_ROOM + roomId) || 'null'); }catch(e){}
   if(d){
     S.rosters   = (d.rosters  || []).map(normRoster);
     S.sessions  = (d.sessions || []).map(normSession);
     S.rosterId  = d.rosterId  || null;
     S.sessionId = d.sessionId || null;
     S.view      = ['players','teams','matches'].indexOf(d.view) >= 0 ? d.view : 'players';
-    found = true;
-  }else{
-    /* chuyển từ bản cũ: một danh sách người chơi duy nhất */
-    try{
-      const o = JSON.parse(localStorage.getItem(LS_OLD) || 'null');
-      if(o && o.players && o.players.length){
-        S.rosters = [normRoster({ name: 'Danh sách chính', players: o.players })];
-        found = true;
-      }
-    }catch(e){}
   }
   fix();
-  return found;
+  return !!d;
+}
+
+/* ---------------- danh sách nhóm gần đây ---------------- */
+function rooms(){
+  try{
+    const r = JSON.parse(localStorage.getItem(LS_ROOMS) || 'null');
+    if(r && Array.isArray(r.list)) return r;
+  }catch(e){}
+  return { list: [], last: null };
+}
+function rememberRoom(id){
+  const r = rooms();
+  r.list = [id].concat(r.list.filter(x => x !== id)).slice(0, 8);
+  r.last = id;
+  try{ localStorage.setItem(LS_ROOMS, JSON.stringify(r)); }catch(e){}
+}
+function forgetRoom(id){
+  const r = rooms();
+  r.list = r.list.filter(x => x !== id);
+  if(r.last === id) r.last = r.list[0] || null;
+  try{
+    localStorage.setItem(LS_ROOMS, JSON.stringify(r));
+    localStorage.removeItem(LS_ROOM + id);
+  }catch(e){}
+}
+
+/* ---------------- dữ liệu từ bản chưa có nhóm ---------------- */
+/* Người dùng cũ có dữ liệu nằm ngoài mọi nhóm. Lần đầu tạo nhóm sẽ được hỏi có đưa vào không. */
+function legacy(){
+  try{
+    const o = JSON.parse(localStorage.getItem(LS_V3) || 'null');
+    if(o && o.rosters && o.rosters.length)
+      return { rosters: o.rosters.map(normRoster), sessions: (o.sessions || []).map(normSession) };
+  }catch(e){}
+  try{
+    const o = JSON.parse(localStorage.getItem(LS_V2) || 'null');
+    if(o && o.players && o.players.length)
+      return { rosters: [normRoster({ name: 'Danh sách chính', players: o.players })], sessions: [] };
+  }catch(e){}
+  return null;
+}
+function dropLegacy(){
+  try{ localStorage.removeItem(LS_V3); localStorage.removeItem(LS_V2); }catch(e){}
 }
 
 /* Dọn tham chiếu hỏng và đảm bảo luôn có ít nhất 1 danh sách */
@@ -239,6 +284,7 @@ function hasResults(s){
 
 root.PBStore = {
   state: S, data, load, save, saveLocal, applyRemote, isApplying, fix,
+  rooms, rememberRoom, forgetRoom, legacy, dropLegacy,
   normPlayer, normRoster, normCfg, normSession,
   roster, session, rosterOf, addRoster, addSession, removeRoster, removeSession, hasResults,
   teamsOf, liveTeams, unteamed, teamLabel,

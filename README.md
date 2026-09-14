@@ -3,7 +3,22 @@
 Web app tĩnh để xếp lịch đánh Pickleball và ghi kết quả từng trận. Thiết kế ưu tiên điện thoại —
 chạm vào trận là nhập được điểm ngay tại sân. Không cần cài đặt, không cần server.
 
-Đồng bộ nhiều người qua Firebase là **tuỳ chọn** — không cấu hình thì app vẫn chạy đầy đủ ở chế độ lưu-trên-máy.
+## Vào nhóm
+
+Mở app là phải **chọn nhóm trước** — nhập mã nhóm rồi mới thấy dữ liệu của nhóm đó.
+Cả nhóm dùng chung một mã sẽ thấy cùng dữ liệu, cập nhật ngay tức thì.
+
+- Mỗi nhóm có **cache riêng trên máy** (`pb_room_<mã nhóm>`), nên đổi qua lại giữa các nhóm
+  không bao giờ lẫn dữ liệu
+- Màn hình vào nhóm nhớ sẵn các nhóm gần đây, bấm một phát là vào
+- Mở bằng **link mời** (`...#room=ma-nhom`) thì vào thẳng, không phải nhập
+- Mất mạng mà nhóm đó đã từng vào: có nút **dùng dữ liệu đã lưu**, sửa bình thường,
+  bấm **Kết nối lại** trong menu khi có mạng
+- Đổi nhóm bất cứ lúc nào bằng nút **Đổi nhóm** trong menu ☰
+
+Mã nhóm đóng vai trò như mật khẩu chung — ai biết mã thì xem và sửa được. Nên đặt mã khó đoán.
+
+Chưa cấu hình Firebase thì app bỏ qua bước này và chạy ở chế độ một máy (xem [FIREBASE.md](FIREBASE.md)).
 
 ## Ba màn hình, mở bằng menu ☰ ở góc trái trên
 

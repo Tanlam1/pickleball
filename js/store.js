@@ -39,16 +39,36 @@ function normPlayer(p){
 }
 function normRoster(r){
   r = r || {};
+  const players = (Array.isArray(r.players) ? r.players : []).slice(0, 200).map(normPlayer);
+  const ids = {};
+  players.forEach(p => { ids[p.id] = true; });
+
+  /* Đội chỉ hợp lệ khi cả 2 người còn trong danh sách, khác nhau,
+     và mỗi người chỉ thuộc đúng một đội. */
+  const taken = {};
+  const teams = (Array.isArray(r.teams) ? r.teams : []).slice(0, 100).map(t => ({
+    id:   String((t && t.id) || PB.newId('t')),
+    name: text(t && t.name, 40, ''),
+    a:    String((t && t.a) || ''),
+    b:    String((t && t.b) || ''),
+  })).filter(t => {
+    if(!ids[t.a] || !ids[t.b] || t.a === t.b) return false;
+    if(taken[t.a] || taken[t.b]) return false;
+    taken[t.a] = taken[t.b] = true;
+    return true;
+  });
+
   return {
     id:      String(r.id || PB.newId('r')),
     name:    text(r.name, 60, 'Danh sách'),
-    players: (Array.isArray(r.players) ? r.players : []).slice(0, 200).map(normPlayer),
+    players: players,
+    teams:   teams,
   };
 }
 function normCfg(c){
   c = c || {};
   return {
-    mode:         ['mixed','split','free'].indexOf(c.mode) >= 0 ? c.mode : 'mixed',
+    mode:         ['mixed','split','free','teams'].indexOf(c.mode) >= 0 ? c.mode : 'mixed',
     courts:       clamp(c.courts,   1,  20, 2),
     minGames:     clamp(c.minGames, 1,  50, 4),
     maxGames:     clamp(c.maxGames, 0,  50, 0),
@@ -62,6 +82,8 @@ function normMatch(m){
   return {
     a:  (Array.isArray(m.a) ? m.a : []).slice(0, 2).map(String),
     b:  (Array.isArray(m.b) ? m.b : []).slice(0, 2).map(String),
+    ta: m.ta ? String(m.ta) : null,      // id đội (chỉ có ở chế độ đội cố định)
+    tb: m.tb ? String(m.tb) : null,
     s1: sc(m.s1),
     s2: sc(m.s2),
     win: (m.win === 1 || m.win === 2) ? m.win : null,
@@ -109,7 +131,7 @@ function load(){
     S.sessions  = (d.sessions || []).map(normSession);
     S.rosterId  = d.rosterId  || null;
     S.sessionId = d.sessionId || null;
-    S.view      = d.view === 'matches' ? 'matches' : 'players';
+    S.view      = ['players','teams','matches'].indexOf(d.view) >= 0 ? d.view : 'players';
     found = true;
   }else{
     /* chuyển từ bản cũ: một danh sách người chơi duy nhất */
@@ -183,6 +205,33 @@ function removeSession(id){
   fix();
 }
 
+/* ---------------- đội cố định ---------------- */
+
+/* Đội đã dựng thành object người chơi. Bỏ đội có người không còn trong danh sách. */
+function teamsOf(roster){
+  if(!roster) return [];
+  const by = {};
+  roster.players.forEach(p => { by[p.id] = p; });
+  return roster.teams
+    .map(t => ({ id: t.id, name: t.name, p1: by[t.a], p2: by[t.b] }))
+    .filter(t => t.p1 && t.p2);
+}
+
+/* Đội dùng được cho buổi trận: cả 2 người phải được tick "Chơi" */
+function liveTeams(roster){
+  return teamsOf(roster).filter(t => t.p1.active && t.p2.active);
+}
+
+/* Người chưa được xếp vào đội nào */
+function unteamed(roster){
+  if(!roster) return [];
+  const inTeam = {};
+  roster.teams.forEach(t => { inTeam[t.a] = true; inTeam[t.b] = true; });
+  return roster.players.filter(p => !inTeam[p.id]);
+}
+
+const teamLabel = t => t.name || (t.p1.name + ' & ' + t.p2.name);
+
 /* Buổi trận đã có kết quả nào chưa (dùng để cảnh báo trước khi tạo lại lịch) */
 function hasResults(s){
   return !!(s && s.rounds.some(r => r.matches.some(m => m.win === 1 || m.win === 2)));
@@ -192,6 +241,7 @@ root.PBStore = {
   state: S, data, load, save, saveLocal, applyRemote, isApplying, fix,
   normPlayer, normRoster, normCfg, normSession,
   roster, session, rosterOf, addRoster, addSession, removeRoster, removeSession, hasResults,
+  teamsOf, liveTeams, unteamed, teamLabel,
 };
 
 })(typeof window !== 'undefined' ? window : globalThis);

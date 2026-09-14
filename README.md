@@ -5,7 +5,7 @@ chạm vào trận là nhập được điểm ngay tại sân. Không cần cà
 
 Đồng bộ nhiều người qua Firebase là **tuỳ chọn** — không cấu hình thì app vẫn chạy đầy đủ ở chế độ lưu-trên-máy.
 
-## Hai màn hình, mở bằng menu ☰ ở góc trái trên
+## Ba màn hình, mở bằng menu ☰ ở góc trái trên
 
 ### 1. Danh sách người chơi
 
@@ -16,7 +16,22 @@ Mỗi dòng gồm **Tên · Giới tính · Rating · Chơi** (tick chọn ai c�
 - Nhập hàng loạt bằng dán text: `Tên, Nam/Nữ, Rating` mỗi dòng
 - Xoá một danh sách sẽ xoá luôn các buổi trận dùng nó (có cảnh báo trước)
 
-### 2. Tạo trận
+### 2. Danh sách đội
+
+Đội là **cặp 2 người cố định**, gắn với một danh sách người chơi và dùng lại cho mọi buổi trận.
+
+Ghép tự động bằng một nút, ba kiểu:
+
+| Kiểu | Cách ghép |
+|---|---|
+| **Cân bằng trình độ** | mạnh nhất ghép yếu nhất, để các đội đều sức nhau |
+| **Đôi nam nữ** | mỗi đội 1 nam + 1 nữ; phần dư ghép cùng giới |
+| **Ngẫu nhiên** | bốc thăm |
+
+Ghép thủ công từng cặp cũng được, và mỗi đội đặt được tên riêng (để trống thì hiện tên 2 người).
+Số người lẻ sẽ được báo rõ. Đội có người chưa tick **Chơi** sẽ tự động không tham gia buổi trận.
+
+### 3. Tạo trận
 
 Tạo được **nhiều buổi trận**, mỗi buổi có tên riêng (mặc định `Buổi 14/9`, đổi được).
 
@@ -24,7 +39,7 @@ Tạo được **nhiều buổi trận**, mỗi buổi có tên riêng (mặc đ
 
 | | |
 |---|---|
-| Chế độ | Đôi nam nữ · Tách nam nữ · Ngẫu nhiên tự do |
+| Chế độ | Đôi nam nữ · Tách nam nữ · Ngẫu nhiên tự do · **Đội cố định** |
 | Số sân | bao nhiêu trận chạy song song mỗi vòng |
 | Ván tối thiểu / tối đa mỗi người | |
 | Số người tối đa | 0 = lấy hết |
@@ -39,7 +54,24 @@ Mỗi thẻ trận hiện sẵn mức lệch; trận nào vượt ngưỡng sẽ
 **Bảng thống kê** nằm ngay đầu màn hình, cập nhật tức thì: số trận đã đấu, thắng, thua, hiệu số điểm,
 xếp hạng theo số trận thắng.
 
+Chọn **Đội cố định** thì đơn vị xếp lịch là đội chứ không phải cá nhân: các ô nhập đổi sang
+"trận mỗi đội" / "số đội tối đa", bảng xếp hạng tính theo đội, và mỗi trận hiện tên đội.
+Nếu danh sách chưa có đội, ngay tại đây sẽ có nút ghép nhanh — không cần quay lại màn hình kia.
+
 ## Thuật toán chia
+
+### Chế độ đội cố định
+
+Ưu tiên theo đúng thứ tự này:
+
+1. **Không gặp lại đội đã đấu** — ưu tiên tuyệt đối, phạt lớn hơn mọi tiêu chí khác cộng lại
+2. Mỗi đội đủ số trận tối thiểu, đội đánh ít nhất được ra sân trước
+3. Ghép hai đội có tổng rating gần nhau
+
+Đủ đội thì không cặp nào gặp lại nhau. Nhóm ít đội thì buộc phải lặp — khi đó phần lặp được
+**rải đều** chứ không dồn vào một cặp, và app báo rõ cần bao nhiêu đội để hết lặp.
+
+### Các chế độ còn lại
 
 Mỗi vòng ưu tiên người **đánh ít ván nhất**, rồi **nghỉ lâu nhất**.
 
@@ -72,7 +104,7 @@ là nguyên nhân chính làm cặp trùng tăng.
 index.html              giao diện — drawer, 2 màn hình, sheet nhập điểm
 css/app.css             style mobile-first, tự đổi màu theo light/dark của máy
 js/scheduler.js         thuật toán chia trận + thống kê — thuần tuý, chạy được cả trong Node
-js/store.js             trạng thái: nhiều danh sách, nhiều buổi trận, lưu localStorage
+js/store.js             trạng thái: nhiều danh sách, đội cố định, nhiều buổi trận, lưu localStorage
 js/sync.js              đồng bộ Firestore (nạp SDK bằng dynamic import)
 js/app.js               giao diện, nối 3 file trên
 js/firebase-config.js   cấu hình Firebase — để trống = chạy ngoại tuyến

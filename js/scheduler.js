@@ -259,6 +259,207 @@ function generate(activeList, cfg){
   return { ctx, rounds, cfg, list, dropped };
 }
 
+/* ============================ ĐỘI CỐ ĐỊNH ============================
+   Ở chế độ này đơn vị xếp lịch là ĐỘI (cặp 2 người cố định) chứ không phải cá nhân.
+   Mục tiêu: mỗi đội đánh đủ số trận, và hạn chế gặp lại đội đã đấu rồi. */
+
+/* Ở chế độ đội cố định, KHÔNG GẶP LẠI ĐỘI ĐÃ ĐẤU là mục tiêu số một.
+   W_MET phải lớn hơn MỌI khoản phạt rating có thể có, nếu không thuật toán sẽ
+   chấp nhận lặp cặp đấu để né ngưỡng lệch — ngược thứ tự ưu tiên.
+   Rating 1–8 nên tổng đội là 2–16, lệch tối đa 14; phạt rating tối đa
+   = 14*14² + 600*(1+13²) ≈ 105.000, nên 1.000.000 là đủ an toàn.
+   Không chặn trên phần vượt ngưỡng: chặn sẽ làm mọi mức lệch lớn trông như nhau
+   và ngưỡng mất khả năng phân biệt. */
+const W_MET = 1000000;
+
+const trating = t => t.p1.rating + t.p2.rating;
+
+/* Ghép đội tự động. style: 'balanced' | 'mixed' | 'random' */
+function makeTeams(players, style){
+  const P = shuffle(players.slice());          // xáo trước để các trường hợp bằng nhau không bị thiên vị
+  const teams = [], left = [];
+
+  if(style === 'mixed'){
+    const M = P.filter(p => p.gender === 'M'), F = P.filter(p => p.gender === 'F');
+    const n = Math.min(M.length, F.length);
+    for(let i = 0; i < n; i++) teams.push({ p1: M[i], p2: F[i] });
+    left.push.apply(left, M.slice(n).concat(F.slice(n)));   // dư bên nào thì ghép cùng giới
+  }else if(style === 'balanced'){
+    const S = P.slice().sort((a, b) => b.rating - a.rating);
+    while(S.length >= 2) teams.push({ p1: S.shift(), p2: S.pop() });   // mạnh nhất ghép yếu nhất
+    left.push.apply(left, S);
+  }else{
+    left.push.apply(left, P);
+  }
+
+  for(let i = 0; i + 1 < left.length; i += 2) teams.push({ p1: left[i], p2: left[i+1] });
+  return { teams, odd: left.length % 2 ? left[left.length - 1] : null };
+}
+
+function tscore(m, ctx){
+  let s = W_MET * Math.pow(ctx.met[pk(m.t1, m.t2)] || 0, 2);
+  if(!ctx.cfg.ignoreRating){
+    const d = Math.abs(trating(m.t1) - trating(m.t2));
+    s += W_RATING * d * d;
+    const cap = ctx.cfg.maxGap;
+    if(cap > 0 && d > cap) s += W_OVERGAP * (1 + (d - cap) * (d - cap));
+  }
+  return s;
+}
+
+function refineTeams(matches, bench, ctx){
+  const slots = [];
+  matches.forEach((m, mi) => slots.push({ mi, k:'t1' }, { mi, k:'t2' }));
+  const ms = matches.map(m => tscore(m, ctx));
+  let total = ms.reduce((a, b) => a + b, 0);
+
+  for(let sweep = 0; sweep < SWEEPS; sweep++){
+    let improved = false;
+
+    /* đổi chỗ 2 đội giữa hai trận khác nhau */
+    for(let a = 0; a < slots.length; a++){
+      for(let b = a + 1; b < slots.length; b++){
+        const A = slots[a], B = slots[b];
+        if(A.mi === B.mi) continue;                  // đảo 2 đội trong cùng trận -> vẫn là trận đó
+        const ta = matches[A.mi][A.k], tb = matches[B.mi][B.k];
+        const old = ms[A.mi] + ms[B.mi];
+        matches[A.mi][A.k] = tb;
+        matches[B.mi][B.k] = ta;
+        const nA = tscore(matches[A.mi], ctx), nB = tscore(matches[B.mi], ctx);
+        if(nA + nB < old - 1e-9){
+          ms[A.mi] = nA; ms[B.mi] = nB;
+          total += nA + nB - old;
+          improved = true;
+        }else{
+          matches[A.mi][A.k] = ta;
+          matches[B.mi][B.k] = tb;
+        }
+      }
+    }
+
+    /* thay bằng đội đang nghỉ có cùng mức ưu tiên */
+    for(let a = 0; a < slots.length; a++){
+      const A = slots[a], ta = matches[A.mi][A.k];
+      for(let k = 0; k < bench.length; k++){
+        const tb = bench[k];
+        /* Chỉ cần bằng số trận đã đấu. Khác chế độ cá nhân, ở đây không đòi bằng cả số vòng nghỉ:
+           đội là khối cố định nên không gian lựa chọn đã rất hẹp, siết thêm thì gần như
+           mỗi vòng chỉ còn đúng một cách xếp. Công bằng số trận vẫn được giữ nguyên. */
+        if(ctx.games[tb.id] !== ctx.games[ta.id]) continue;
+        const old = ms[A.mi];
+        matches[A.mi][A.k] = tb;
+        const n = tscore(matches[A.mi], ctx);
+        if(n < old - 1e-9){
+          ms[A.mi] = n; total += n - old; bench[k] = ta; improved = true; break;
+        }
+        matches[A.mi][A.k] = ta;
+      }
+    }
+
+    if(!improved) break;
+  }
+  return total;
+}
+
+function buildTeamRound(ctx){
+  const { courts, maxGames } = ctx.cfg;
+  const pool = ctx.teams.filter(t => !maxGames || ctx.games[t.id] < maxGames);
+  pool.forEach(t => { t._r = Math.random(); });
+  const prio = (a, b) => (ctx.games[a.id] - ctx.games[b.id])
+                      || (ctx.rest[b.id] - ctx.rest[a.id]) || (a._r - b._r);
+
+  const sorted = pool.slice().sort(prio);
+  const c = Math.min(courts, sorted.length >> 1);
+  if(c < 1) return null;
+
+  const sel = sorted.slice(0, c*2), bench = sorted.slice(c*2);
+  let best = null, bestS = Infinity;
+  for(let t = 0; t < SEEDS; t++){
+    /* Seed 0 xếp theo rating rồi ghép hai đội liền kề — với một nhóm đội cho trước
+       đây là cách ghép cho tổng chênh lệch nhỏ nhất, nên là điểm xuất phát rất tốt.
+       Các seed còn lại xáo ngẫu nhiên để thoát khỏi cực tiểu cục bộ. */
+    const T = t === 0 ? sel.slice().sort((a, b) => trating(a) - trating(b)) : shuffle(sel.slice());
+    const ms = [];
+    for(let i = 0; i * 2 < T.length; i++) ms.push({ t1: T[2*i], t2: T[2*i+1] });
+    const s = refineTeams(ms, bench.slice(), ctx);
+    if(s < bestS){ bestS = s; best = ms; }
+  }
+  return best || [];
+}
+
+function commitTeams(matches, ctx){
+  const playing = new Set();
+  for(const m of matches){
+    [m.t1, m.t2].forEach(t => { playing.add(t.id); ctx.games[t.id]++; ctx.rest[t.id] = 0; });
+    const k = pk(m.t1, m.t2);
+    ctx.met[k] = (ctx.met[k] || 0) + 1;
+  }
+  return ctx.teams.filter(t => !playing.has(t.id)).map(t => { ctx.rest[t.id]++; return t; });
+}
+
+/* teams = [{ id, name, p1, p2 }] — p1/p2 là object người chơi */
+function generateTeams(teams, cfg){
+  const list = cfg.cap ? teams.slice(0, cfg.cap) : teams;
+  const dropped = teams.filter(t => list.indexOf(t) === -1);
+  if(list.length < 2)
+    return { error: 'Cần ít nhất 2 đội có đủ cả 2 người được tick "Chơi".' };
+
+  const ctx = { teams: list, cfg, games: {}, rest: {}, met: {} };
+  list.forEach(t => { ctx.games[t.id] = 0; ctx.rest[t.id] = 0; });
+
+  const rounds = [];
+  let stall = 0;
+  while(rounds.length < 200){
+    const needy = list.filter(t => ctx.games[t.id] < cfg.minGames);
+    if(!needy.length) break;
+    const matches = buildTeamRound(ctx);
+    if(!matches || !matches.length) break;
+    const before = needy.map(t => t.id);
+    const resting = commitTeams(matches, ctx);
+    const progressed = before.some(id => !resting.find(r => r.id === id));
+    rounds.push({ matches, resting });
+    stall = progressed ? 0 : stall + 1;
+    if(stall >= 3) break;
+  }
+  return { ctx, rounds, cfg, list, dropped };
+}
+
+/* Lưu trữ chung một định dạng với chế độ cá nhân: a/b là id 2 người mỗi bên.
+   Thêm ta/tb để biết đó là đội nào. */
+function toTeamRounds(res){
+  if(!res || res.error) return [];
+  return res.rounds.map(r => ({
+    matches: r.matches.map(m => ({
+      a: [m.t1.p1.id, m.t1.p2.id], b: [m.t2.p1.id, m.t2.p2.id],
+      ta: m.t1.id, tb: m.t2.id,
+      s1: null, s2: null, win: null,
+    })),
+  }));
+}
+
+/* Bảng xếp hạng theo ĐỘI (chế độ đội cố định) */
+function teamStats(session, teams){
+  const by = {};
+  teams.forEach(t => { by[t.id] = t; });
+  const s = {};
+
+  (session.rounds || []).forEach(r => (r.matches || []).forEach(m => {
+    [[m.ta, 1], [m.tb, 2]].forEach(pair => {
+      const id = pair[0], side = pair[1];
+      if(!id || !by[id]) return;
+      const x = s[id] || (s[id] = { team: by[id], sched: 0, done: 0, win: 0, loss: 0, diff: 0 });
+      x.sched++;
+      if(m.win !== 1 && m.win !== 2) return;
+      const a = +m.s1 || 0, b = +m.s2 || 0;
+      x.done++;
+      x.diff += side === 1 ? a - b : b - a;
+      if(m.win === side) x.win++; else x.loss++;
+    });
+  }));
+
+  return Object.keys(s).map(k => s[k]).sort((x, y) => y.win - x.win || y.diff - x.diff);
+}
+
 /* ---- Dạng lưu trữ: chỉ id + ô điểm, để cất vào localStorage / Firestore ---- */
 
 function toRounds(res){
@@ -288,7 +489,7 @@ function hydrate(session, players){
     for(const m of (r.matches || [])){
       const t1 = (m.a || []).map(i => by[i]), t2 = (m.b || []).map(i => by[i]);
       if(t1.length !== 2 || t2.length !== 2 || t1.concat(t2).some(p => !p)) return null;
-      matches.push({ t1, t2, s1: m.s1, s2: m.s2, win: m.win || null });
+      matches.push({ t1, t2, s1: m.s1, s2: m.s2, win: m.win || null, ta: m.ta, tb: m.tb });
     }
     rounds.push({ matches, resting: [] });
   }
@@ -317,7 +518,8 @@ function stats(h){
     y.win - x.win || y.diff - x.diff || x.p.name.localeCompare(y.p.name, 'vi'));
 }
 
-const API = { newId, pk, gap, makeCtx, commit, applyCap, generate, toRounds, hydrate, stats };
+const API = { newId, pk, gap, makeCtx, commit, applyCap, generate, toRounds, hydrate, stats,
+              makeTeams, generateTeams, toTeamRounds, teamStats };
 if(typeof module !== 'undefined' && module.exports) module.exports = API;
 root.PB = API;
 

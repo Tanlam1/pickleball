@@ -159,6 +159,10 @@ td .ck{width:22px;height:22px;accent-color:var(--accent);display:block;margin:0 
 .match .mhead{display:flex;justify-content:space-between;align-items:center;gap:8px;
   font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
 .match .mstate.done{color:var(--ok)}
+.tmembers{display:block;font-size:12px;color:var(--muted);font-weight:500;margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tout{color:var(--warn-fg);font-weight:600}
+#tlist td input[type=text]{margin-bottom:1px}
 .match .gap{opacity:.62;font-weight:600;margin-left:2px}
 .match .gap.over{opacity:1;color:var(--warn-fg);background:var(--warn-bg);
   border:1px solid var(--warn-bd);border-radius:5px;padding:0 5px;margin-left:4px}

@@ -27,8 +27,11 @@
   <button class="dnav" data-view="players">
     <span class="di">1</span><span class="dlabel">Danh sách người chơi</span><span class="dcount" id="navRosters"></span>
   </button>
+  <button class="dnav" data-view="teams">
+    <span class="di">2</span><span class="dlabel">Danh sách đội</span><span class="dcount" id="navTeams"></span>
+  </button>
   <button class="dnav" data-view="matches">
-    <span class="di">2</span><span class="dlabel">Tạo trận</span><span class="dcount" id="navSessions"></span>
+    <span class="di">3</span><span class="dlabel">Tạo trận</span><span class="dcount" id="navSessions"></span>
   </button>
 
   <div class="dsync" id="syncBox">
@@ -99,7 +102,48 @@
   </div>
 </section>
 
-<!-- ============ 2. TẠO TRẬN ============ -->
+<!-- ============ 2. DANH SÁCH ĐỘI ============ -->
+<section id="viewTeams" class="hide">
+  <div class="panel">
+    <div class="picker">
+      <select id="tRosterSel" aria-label="Chọn danh sách người chơi"></select>
+    </div>
+    <p class="meta" id="tcount"></p>
+  </div>
+
+  <div class="panel">
+    <div class="phead">
+      <h2>Ghép đội tự động</h2>
+      <span class="meta">Đội ghép xong là cố định — dùng lại cho mọi buổi trận</span>
+    </div>
+    <div class="actions" style="margin-top:0">
+      <button class="primary" id="btnTeamBalanced">Cân bằng trình độ</button>
+      <button id="btnTeamMixed">Đôi nam nữ</button>
+      <button id="btnTeamRandom">Ngẫu nhiên</button>
+    </div>
+    <p class="hint">Mạnh nhất ghép yếu nhất để các đội đều sức nhau. Ghép lại sẽ thay toàn bộ đội hiện có.</p>
+  </div>
+
+  <div class="panel">
+    <div class="phead"><h2>Các đội</h2><span class="meta" id="tmeta"></span></div>
+    <div class="tscroll"><table>
+      <thead><tr>
+        <th class="w-rk">#</th><th>Đội</th><th class="w-rt">Tổng</th><th class="w-x"></th>
+      </tr></thead>
+      <tbody id="tlist"></tbody>
+    </table></div>
+    <p class="empty" id="tempty">Chưa có đội nào. Bấm một trong ba nút ghép tự động ở trên.</p>
+
+    <div class="row" style="margin-top:14px">
+      <div><label>Ghép thủ công</label><select id="tPickA"></select></div>
+      <div><label>&nbsp;</label><select id="tPickB"></select></div>
+      <div class="f-auto"><button class="primary" id="btnTeamAdd">Tạo đội</button></div>
+    </div>
+    <p class="hint" id="tleft"></p>
+  </div>
+</section>
+
+<!-- ============ 3. TẠO TRẬN ============ -->
 <section id="viewMatches" class="hide">
   <div class="panel">
     <div class="picker">
@@ -122,16 +166,20 @@
             <option value="mixed">Đôi nam nữ (mỗi đội 1 nam + 1 nữ)</option>
             <option value="split">Tách nam nữ (đôi nam riêng, đôi nữ riêng)</option>
             <option value="free">Ngẫu nhiên tự do</option>
+            <option value="teams">Đội cố định (dùng danh sách đội)</option>
           </select></div>
         </div>
+
+        <div id="teamNotice" class="warn hide"></div>
+
         <div class="row">
           <div class="f-sm"><label>Số sân</label>
             <input type="number" id="cCourts" min="1" max="20" inputmode="numeric"></div>
-          <div class="f-sm"><label>Ván tối thiểu</label>
+          <div class="f-sm"><label id="lblMin">Ván tối thiểu</label>
             <input type="number" id="cMin" min="1" max="50" inputmode="numeric"></div>
-          <div class="f-sm"><label>Ván tối đa<br><i>0 = không giới hạn</i></label>
+          <div class="f-sm"><label id="lblMax">Ván tối đa<br><i>0 = không giới hạn</i></label>
             <input type="number" id="cMax" min="0" max="50" inputmode="numeric"></div>
-          <div class="f-sm"><label>Số người tối đa<br><i>0 = tất cả</i></label>
+          <div class="f-sm"><label id="lblCap">Số người tối đa<br><i>0 = tất cả</i></label>
             <input type="number" id="cCap" min="0" max="200" inputmode="numeric"></div>
           <div class="f-sm"><label>Lệch rating tối đa<br><i>0 = không giới hạn</i></label>
             <input type="number" id="cMaxGap" min="0" max="10" step="0.25" inputmode="decimal"></div>
@@ -150,12 +198,19 @@
         <h2>Bảng thống kê</h2>
         <span class="meta" id="standMeta"></span>
       </div>
-      <div class="tscroll"><table class="stats">
+      <div class="tscroll" id="standPlayers"><table class="stats">
         <thead><tr>
           <th class="w-rk">#</th><th>Tên</th>
           <th class="num">Đấu</th><th class="num">Thắng</th><th class="num">Thua</th><th class="num">+/−</th>
         </tr></thead>
         <tbody id="standBody"></tbody>
+      </table></div>
+      <div class="tscroll hide" id="standTeams"><table class="stats">
+        <thead><tr>
+          <th class="w-rk">#</th><th>Đội</th>
+          <th class="num">Đấu</th><th class="num">Thắng</th><th class="num">Thua</th><th class="num">+/−</th>
+        </tr></thead>
+        <tbody id="standTeamBody"></tbody>
       </table></div>
     </div>
 

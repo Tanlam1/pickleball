@@ -84,7 +84,27 @@ Rules này cho phép: ai đăng nhập được (kể cả ẩn danh) **và** bi
 
 `localhost` đã có sẵn nên test trên máy không cần thêm gì.
 
-## Bước 7 — Chạy thử trên máy
+## Bước 7 — Kiểm tra bằng script
+
+```bash
+node tools/check-firebase.js
+```
+
+Script gọi thẳng Firebase REST API bằng đúng luồng mà app dùng (đăng nhập ẩn danh → đọc → ghi),
+và chỉ ra chính xác bước nào chưa xong:
+
+```
+[1/5] Đọc js/firebase-config.js .......... OK  project: pickleball-cmc
+[2/5] Đăng nhập ẩn danh .................. OK
+[3/5] Firestore Database + quyền đọc ..... OK
+[4/5] Ghi dữ liệu hợp lệ ................. OK
+[5/5] Rules chặn dữ liệu sai định dạng ... OK
+```
+
+Bước 5 quan trọng: nó thử ghi dữ liệu sai định dạng và **mong đợi bị từ chối**.
+Nếu ghi được, nghĩa là Rules chưa áp dụng — database của bạn đang mở cho cả thế giới.
+
+## Bước 8 — Chạy thử trên máy
 
 Đăng nhập Firebase **không chạy được từ `file://`**, nên phải mở qua web server:
 
@@ -98,7 +118,7 @@ Mở http://localhost:8000 → nhập mã phòng (vd `cmc-pickleball`) → **K�
 Kiểm tra thật: mở thêm một cửa sổ ẩn danh vào cùng địa chỉ, nhập cùng mã phòng, thêm một người chơi —
 cửa sổ kia phải cập nhật ngay.
 
-## Bước 8 — Đưa lên GitHub Pages
+## Bước 9 — Đưa lên GitHub Pages
 
 ```powershell
 git add -A

@@ -26,7 +26,7 @@ service cloud.firestore {
             && d.sessions.size() <= 200
             && d.updatedBy is string
             && d.updatedBy.size() <= 40
-            && d.updatedAt == request.time;
+            && d.updatedAt is timestamp;
       }
 
       allow read:           if request.auth != null && validId();

@@ -1,5 +1,5 @@
-/* app.js — giao diện: drawer, 2 màn hình (danh sách người chơi / tạo trận),
-   sheet nhập điểm, và nối với PBStore + PBSync. */
+/* app.js — giao diện: cổng vào nhóm, 3 màn hình, sheet nhập điểm.
+   Nối PBStore (trạng thái) với PB (thuật toán) và PBSync (đồng bộ). */
 (function(){
 'use strict';
 
@@ -9,8 +9,8 @@ const S = PBStore.state;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const sv  = v => (v === null || v === undefined || v === '') ? '–' : v;
 
-const MODE = { mixed:'Đôi nam nữ', split:'Tách nam nữ', free:'Ngẫu nhiên tự do', teams:'Đội cố định' };
 const TITLE = { players:'Danh sách người chơi', teams:'Danh sách đội', matches:'Tạo trận' };
+const STYLE = { male:'Đôi nam', female:'Đôi nữ', mixed:'Đôi nam nữ', random:'Ngẫu nhiên' };
 const SAMPLE = [
   ['Minh','M',4.25],['Tuấn','M',3.75],['Hùng','M',3.5],['Nam','M',4.0],
   ['Dũng','M',3.25],['Khoa','M',3.5],['Phong','M',4.5],
@@ -18,8 +18,8 @@ const SAMPLE = [
   ['Linh','F',4.0],['Trang','F',3.0],['Ngọc','F',3.5],
 ];
 
-let H = null;              // buổi trận hiện tại đã dựng thành object
-let TMAP = {};             // id đội -> đội (chỉ dùng ở chế độ đội cố định)
+let H = null;                  // lịch hiện tại đã dựng thành object
+let standScope = 'session';    // 'session' | 'day'
 let currentRoom = null;
 
 let toastTimer = null;
@@ -28,25 +28,16 @@ function toast(msg){
   t.textContent = msg;
   t.classList.add('on');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('on'), 2400);
+  toastTimer = setTimeout(() => t.classList.remove('on'), 2600);
 }
 
-const dot = p => `<span class="dot ${p.gender === 'M' ? 'm' : 'f'}"></span>`;
-const teamHtml = t => t.map(p => dot(p) + esc(p.name)).join(' &amp; ');
-const teamSum  = t => (t[0].rating + t[1].rating).toFixed(2);
-
-/* Nhãn một bên của trận. Chế độ đội cố định: nếu đội có tên riêng thì tên đứng chính,
-   tên 2 người xuống dòng phụ. Các chế độ khác: chỉ tên 2 người. */
-function sideHtml(m, side){
-  const players = teamHtml(side === 1 ? m.t1 : m.t2);
-  const t = TMAP[side === 1 ? m.ta : m.tb];
-  return (t && t.name) ? `<b>${esc(t.name)}</b><span class="tmembers">${players}</span>` : players;
-}
-function sideText(m, side){
-  const players = (side === 1 ? m.t1 : m.t2).map(p => p.name).join(' & ');
-  const t = TMAP[side === 1 ? m.ta : m.tb];
-  return (t && t.name) ? `${t.name} (${players})` : players;
-}
+const dot      = p => `<span class="dot ${p.gender === 'M' ? 'm' : 'f'}"></span>`;
+const pairHtml = t => dot(t.p1) + esc(t.p1.name) + ' &amp; ' + dot(t.p2) + esc(t.p2.name);
+const pairText = t => t.p1.name + ' & ' + t.p2.name;
+/* Đội có tên riêng thì tên đứng chính, tên 2 người xuống dòng phụ */
+const sideHtml = t => t.name
+  ? `<b>${esc(t.name)}</b><span class="tmembers">${pairHtml(t)}</span>` : pairHtml(t);
+const sideText = t => t.name ? `${t.name} (${pairText(t)})` : pairText(t);
 
 /* ============================ KHUNG ============================ */
 function setDrawer(open){
@@ -79,7 +70,7 @@ function render(){
   Array.prototype.forEach.call(document.querySelectorAll('.dnav'),
     b => b.classList.toggle('on', b.dataset.view === S.view));
   $('navRosters').textContent  = S.rosters.length;
-  $('navTeams').textContent    = PBStore.roster().teams.length;
+  $('navTeams').textContent    = S.teamSets.length;
   $('navSessions').textContent = S.sessions.length;
   if(S.view === 'players')      renderPlayers();
   else if(S.view === 'teams')   renderTeams();
@@ -113,7 +104,7 @@ function renderPlayers(){
   updateCount();
 }
 
-/* Sửa tại chỗ, không render lại cả bảng (giữ con trỏ khi đang gõ) */
+/* sửa tại chỗ, không render lại cả bảng (giữ con trỏ khi đang gõ) */
 $('plist').addEventListener('input', e => {
   const t = e.target, i = t.dataset.i, k = t.dataset.k;
   if(i === undefined || !k) return;
@@ -163,9 +154,9 @@ $('btnRosterRename').onclick = () => {
 };
 $('btnRosterDel').onclick = () => {
   const r = PBStore.roster();
-  const used = S.sessions.filter(s => s.rosterId === r.id).length;
-  if(!confirm(used
-    ? `Xoá danh sách "${r.name}"?\n\n${used} buổi trận đang dùng danh sách này sẽ bị xoá theo.`
+  const ts = S.teamSets.filter(t => t.rosterId === r.id).length;
+  if(!confirm(ts
+    ? `Xoá danh sách "${r.name}"?\n\n${ts} danh sách đội (và các danh sách trận dùng chúng) sẽ bị xoá theo.`
     : `Xoá danh sách "${r.name}"?`)) return;
   PBStore.removeRoster(r.id);
   render();
@@ -214,17 +205,42 @@ $('btnBulkGo').onclick = () => {
 };
 
 /* ============================ 2. DANH SÁCH ĐỘI ============================ */
+function pickTeamSet(){
+  const on = PBStore.teamSetsOn(S.teamDate);
+  if(on.map(t => t.id).indexOf(S.teamSetId) < 0) S.teamSetId = on.length ? on[0].id : null;
+  return on;
+}
+
 function renderTeams(){
-  const r = PBStore.roster();
+  $('tDate').value = S.teamDate;
+  const on = pickTeamSet();
+  const ts = PBStore.teamSet();
+
+  $('tSetSel').innerHTML = on.map(x =>
+    `<option value="${x.id}"${ts && x.id === ts.id ? ' selected' : ''}>${esc(x.name)} (${x.teams.length} đội)</option>`).join('')
+    || '<option>— chưa có —</option>';
+  $('tSetSel').disabled      = !on.length;
+  $('btnTSetRename').disabled = !ts;
+  $('btnTSetDel').disabled    = !ts;
+  $('noTeamSet').classList.toggle('hide', !!ts);
+  $('teamBody').classList.toggle('hide', !ts);
+  $('tSetMeta').textContent = on.length
+    ? `${on.length} danh sách đội trong ngày ${PBStore.showDate(S.teamDate)}`
+    : '';
+  if(!ts) return;
+
+  const r = PBStore.rosterOf(ts);
   $('tRosterSel').innerHTML = S.rosters.map(x =>
-    `<option value="${x.id}"${x.id === r.id ? ' selected' : ''}>${esc(x.name)} (${x.players.length} người)</option>`).join('');
+    `<option value="${x.id}"${r && x.id === r.id ? ' selected' : ''}>${esc(x.name)} (${x.players.length} người)</option>`).join('');
 
-  const teams = PBStore.teamsOf(r);
-  const live  = PBStore.liveTeams(r);
-  const left  = PBStore.unteamed(r, true);              // chỉ người đang tick "Chơi"
-  const off   = PBStore.unteamed(r).length - left.length;
+  const teams = PBStore.teamsOf(ts);
+  const live  = PBStore.liveTeams(ts);
+  const left  = PBStore.unteamed(ts, true);
+  const off   = PBStore.unteamed(ts).length - left.length;
+  const a     = r ? r.players.filter(p => p.active) : [];
 
-  $('tcount').textContent = `${teams.length} đội · ${live.length} đội đủ người để xếp trận · ${left.length} người đang tick Chơi chưa có đội`;
+  $('tcount').textContent =
+    `${a.length} người đang tick Chơi (${a.filter(p=>p.gender==='M').length} nam, ${a.filter(p=>p.gender==='F').length} nữ)`;
 
   $('tlist').innerHTML = teams.map((t, i) => `
     <tr>
@@ -232,17 +248,17 @@ function renderTeams(){
       <td>
         <input type="text" data-tname="${t.id}" value="${esc(t.name)}"
                placeholder="${esc(t.p1.name)} &amp; ${esc(t.p2.name)}">
-        <div class="tmembers">${dot(t.p1)}${esc(t.p1.name)} &amp; ${dot(t.p2)}${esc(t.p2.name)}${
+        <div class="tmembers">${pairHtml(t)}${
           (t.p1.active && t.p2.active) ? '' : ' <span class="tout">có người chưa tick Chơi</span>'}</div>
       </td>
-      <td class="num">${(t.p1.rating + t.p2.rating).toFixed(2)}</td>
+      <td class="num">${PB.trating(t).toFixed(2)}</td>
       <td><button class="icon danger" data-tdel="${t.id}" aria-label="Xoá đội">✕</button></td>
     </tr>`).join('');
 
   $('tempty').classList.toggle('hide', teams.length > 0);
   if(teams.length){
-    const sums = teams.map(t => t.p1.rating + t.p2.rating);
-    $('tmeta').textContent = `Tổng rating: thấp nhất ${Math.min.apply(null, sums).toFixed(2)} · cao nhất ${Math.max.apply(null, sums).toFixed(2)}`;
+    const sums = teams.map(PB.trating);
+    $('tmeta').textContent = `${teams.length} đội · ${live.length} đội đủ người · tổng rating ${Math.min.apply(null, sums).toFixed(2)}–${Math.max.apply(null, sums).toFixed(2)}`;
   }else{
     $('tmeta').textContent = '';
   }
@@ -254,79 +270,154 @@ function renderTeams(){
   $('btnTeamAdd').disabled = left.length < 2;
   $('tleft').textContent =
     (left.length ? `Chưa có đội: ${left.map(p => p.name).join(', ')}. ` : 'Mọi người đang chơi đều đã có đội. ') +
-    (off ? `${off} người chưa tick "Chơi" nên không được ghép đội — tick vào nếu muốn xếp đội cho họ.` : '');
+    (off ? `${off} người chưa tick "Chơi" nên không được ghép đội.` : '');
 }
 
-$('tRosterSel').onchange = () => { S.rosterId = $('tRosterSel').value; PBStore.saveLocal(); render(); };
+$('tDate').onchange = () => {
+  S.teamDate = PBStore.normDate($('tDate').value);
+  PBStore.saveLocal();
+  renderTeams();
+};
+$('btnTDateToday').onclick = () => { S.teamDate = PBStore.today(); PBStore.saveLocal(); renderTeams(); };
+$('tSetSel').onchange = () => { S.teamSetId = $('tSetSel').value; PBStore.saveLocal(); renderTeams(); };
+
+$('btnTSetNew').onclick = () => {
+  PBStore.addTeamSet(S.teamDate);
+  render();
+  PBStore.save();
+};
+$('btnTSetRename').onclick = () => {
+  const ts = PBStore.teamSet();
+  const n = prompt('Đổi tên danh sách đội:', ts.name);
+  if(n === null || !n.trim()) return;
+  ts.name = n.trim().slice(0, 60);
+  render();
+  PBStore.save();
+};
+$('btnTSetDel').onclick = () => {
+  const ts = PBStore.teamSet();
+  const used = S.sessions.filter(s => s.teamSetId === ts.id).length;
+  if(!confirm(used
+    ? `Xoá "${ts.name}"?\n\n${used} danh sách trận đang dùng nó sẽ bị xoá theo.`
+    : `Xoá danh sách đội "${ts.name}"?`)) return;
+  PBStore.removeTeamSet(ts.id);
+  render();
+  PBStore.save();
+};
+$('noTeamSet').onclick = () => $('btnTSetNew').click();
+
+$('tRosterSel').onchange = () => {
+  const ts = PBStore.teamSet();
+  if(ts.teams.length && !confirm('Đổi danh sách người chơi sẽ xoá toàn bộ đội đang có. Tiếp tục?')){
+    $('tRosterSel').value = ts.rosterId;
+    return;
+  }
+  ts.rosterId = $('tRosterSel').value;
+  ts.teams = [];
+  renderTeams();
+  PBStore.save();
+};
 
 $('tlist').addEventListener('input', e => {
   const id = e.target.dataset.tname;
   if(!id) return;
-  const t = PBStore.roster().teams.find(x => x.id === id);
+  const t = PBStore.teamSet().teams.find(x => x.id === id);
   if(t){ t.name = e.target.value.slice(0, 40); PBStore.save(); }
 });
 $('tlist').addEventListener('click', e => {
   const b = e.target.closest('[data-tdel]');
   if(!b) return;
-  const r = PBStore.roster();
-  r.teams = r.teams.filter(t => t.id !== b.dataset.tdel);
-  render();
+  const ts = PBStore.teamSet();
+  ts.teams = ts.teams.filter(t => t.id !== b.dataset.tdel);
+  renderTeams();
   PBStore.save();
 });
 
-/* Chỉ ghép đội cho người đang tick "Chơi" — ai chưa tick thì bỏ qua hoàn toàn. */
-function buildTeamsFor(r, style){
-  if(!r) return false;
-  const pool = r.players.filter(p => p.active);
-  const skipped = r.players.length - pool.length;
-  if(pool.length < 2){
-    toast('Cần ít nhất 2 người được tick "Chơi"');
-    return false;
-  }
-  if(r.teams.length && !confirm(
-      `Ghép ${pool.length} người đang tick "Chơi" thành đội.` +
-      (skipped ? `\n${skipped} người chưa tick sẽ không được xếp vào đội nào.` : '') +
-      `\n\nToàn bộ ${r.teams.length} đội hiện có sẽ bị thay. Tiếp tục?`)) return false;
+/* Chỉ ghép đội cho người đang tick "Chơi" */
+function buildTeamsFor(ts, style){
+  if(!ts) return false;
+  const r = PBStore.rosterOf(ts);
+  const pool = r ? r.players.filter(p => p.active) : [];
+  if(pool.length < 2){ toast('Cần ít nhất 2 người được tick "Chơi"'); return false; }
 
   const out = PB.makeTeams(pool, style);
-  r.teams = out.teams.map(t => ({ id: PB.newId('t'), name: '', a: t.p1.id, b: t.p2.id }));
+  if(!out.teams.length){
+    toast(`Không đủ người cho kiểu "${STYLE[style]}"`);
+    return false;
+  }
+  if(ts.teams.length && !confirm(
+      `${STYLE[style]}: ghép được ${out.teams.length} đội từ ${pool.length} người đang tick "Chơi".` +
+      `\n\nToàn bộ ${ts.teams.length} đội hiện có trong "${ts.name}" sẽ bị thay. Tiếp tục?`)) return false;
+
+  ts.teams = out.teams.map(t => ({ id: PB.newId('t'), name: '', a: t.p1.id, b: t.p2.id }));
   PBStore.save();
 
   const notes = [];
-  if(out.odd) notes.push(`${out.odd.name} lẻ chưa có đội`);
-  if(skipped) notes.push(`bỏ qua ${skipped} người chưa tick Chơi`);
-  toast(`Đã ghép ${r.teams.length} đội` + (notes.length ? ` — ${notes.join(', ')}` : ''));
+  if(out.odd) notes.push(`${out.odd.name} lẻ`);
+  if(out.skipped.length) notes.push(`bỏ ${out.skipped.length} người không thuộc kiểu này`);
+  const offCount = r.players.length - pool.length;
+  if(offCount) notes.push(`bỏ ${offCount} người chưa tick Chơi`);
+  toast(`${STYLE[style]}: ${ts.teams.length} đội` + (notes.length ? ` — ${notes.join(', ')}` : ''));
   return true;
 }
-function buildTeams(style){ if(buildTeamsFor(PBStore.roster(), style)) render(); }
-$('btnTeamBalanced').onclick = () => buildTeams('balanced');
-$('btnTeamMixed').onclick    = () => buildTeams('mixed');
-$('btnTeamRandom').onclick   = () => buildTeams('random');
+function buildTeams(style){ if(buildTeamsFor(PBStore.teamSet(), style)) render(); }
+$('btnTeamMale').onclick   = () => buildTeams('male');
+$('btnTeamFemale').onclick = () => buildTeams('female');
+$('btnTeamMixed').onclick  = () => buildTeams('mixed');
+$('btnTeamRandom').onclick = () => buildTeams('random');
 
 $('btnTeamAdd').onclick = () => {
   const a = $('tPickA').value, b = $('tPickB').value;
   if(!a || !b || a === b){ toast('Chọn hai người khác nhau'); return; }
-  PBStore.roster().teams.push({ id: PB.newId('t'), name: '', a: a, b: b });
-  render();
+  PBStore.teamSet().teams.push({ id: PB.newId('t'), name: '', a: a, b: b });
+  renderTeams();
   PBStore.save();
 };
 
 /* ============================ 3. TẠO TRẬN ============================ */
+function pickSession(){
+  const on = PBStore.sessionsOn(S.matchDate);
+  if(on.map(s => s.id).indexOf(S.sessionId) < 0) S.sessionId = on.length ? on[0].id : null;
+  return on;
+}
+
+/* Tất cả đội xuất hiện trong các danh sách trận của một ngày (để thống kê cả ngày) */
+function dayTeams(date){
+  const seen = {};
+  let out = [];
+  PBStore.sessionsOn(date).forEach(s => {
+    if(!s.teamSetId || seen[s.teamSetId]) return;
+    seen[s.teamSetId] = true;
+    const ts = S.teamSets.find(t => t.id === s.teamSetId);
+    if(ts) out = out.concat(PBStore.teamsOf(ts));
+  });
+  return out;
+}
+
 function renderMatches(){
-  const s = PBStore.session();
-  $('sessionSel').innerHTML = S.sessions.map(x =>
+  $('mDate').value = S.matchDate;
+  const on = pickSession();
+  const s  = PBStore.session();
+
+  $('sessionSel').innerHTML = on.map(x =>
     `<option value="${x.id}"${s && x.id === s.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')
-    || '<option>— chưa có buổi trận —</option>';
-  $('sessionSel').disabled     = !S.sessions.length;
+    || '<option>— chưa có —</option>';
+  $('sessionSel').disabled      = !on.length;
   $('btnSessionRename').disabled = !s;
   $('btnSessionDel').disabled    = !s;
   $('noSession').classList.toggle('hide', !!s);
   $('sessionBody').classList.toggle('hide', !s);
   if(!s) return;
 
-  $('cRoster').innerHTML = S.rosters.map(r =>
-    `<option value="${r.id}"${r.id === s.rosterId ? ' selected' : ''}>${esc(r.name)} (${r.players.filter(p=>p.active).length} chơi)</option>`).join('');
-  $('cMode').value          = s.cfg.mode;
+  /* ưu tiên danh sách đội cùng ngày, nhưng vẫn cho chọn của ngày khác */
+  const sameDay = PBStore.teamSetsOn(S.matchDate);
+  const others  = S.teamSets.filter(t => t.date !== S.matchDate);
+  const opt = t => `<option value="${t.id}"${t.id === s.teamSetId ? ' selected' : ''}>${esc(t.name)} — ${PBStore.liveTeams(t).length} đội</option>`;
+  $('cTeamSet').innerHTML =
+    (sameDay.length ? `<optgroup label="Ngày ${PBStore.showDate(S.matchDate)}">${sameDay.map(opt).join('')}</optgroup>` : '') +
+    (others.length  ? `<optgroup label="Ngày khác">${others.map(t =>
+        `<option value="${t.id}"${t.id === s.teamSetId ? ' selected' : ''}>${PBStore.showDate(t.date)} · ${esc(t.name)} — ${PBStore.liveTeams(t).length} đội</option>`).join('')}</optgroup>` : '');
+
   $('cCourts').value        = s.cfg.courts;
   $('cMin').value           = s.cfg.minGames;
   $('cMax').value           = s.cfg.maxGames;
@@ -334,153 +425,111 @@ function renderMatches(){
   $('cMaxGap').value        = s.cfg.maxGap;
   $('cIgnoreRating').checked = s.cfg.ignoreRating;
   $('cMaxGap').disabled      = s.cfg.ignoreRating;
-  applyMode(s);
 
+  const ts = PBStore.teamSetOf(s);
+  const box = $('teamNotice');
+  if(!ts){
+    box.classList.remove('hide');
+    box.innerHTML = `Chưa chọn được danh sách đội. Sang mục <b>Danh sách đội</b> tạo một danh sách cho ngày ${PBStore.showDate(S.matchDate)}.`;
+  }else{
+    const all = PBStore.teamsOf(ts), live = PBStore.liveTeams(ts);
+    if(!all.length){
+      box.classList.remove('hide');
+      box.innerHTML = `Danh sách đội <b>${esc(ts.name)}</b> chưa có đội nào — sang mục <b>Danh sách đội</b> để ghép.`;
+    }else if(live.length < all.length){
+      box.classList.remove('hide');
+      box.innerHTML = `${all.length - live.length}/${all.length} đội không tham gia được vì có người chưa tick "Chơi".`;
+    }else{
+      box.classList.add('hide');
+    }
+  }
+
+  updateGenHint();
   renderRounds();
 }
 
-/* Chế độ "đội cố định" đổi ý nghĩa vài ô nhập, và cần danh sách đội sẵn sàng */
-function applyMode(s){
-  const T = s.cfg.mode === 'teams';
-  const unit = T ? 'trận' : 'ván';
-  $('lblMin').innerHTML = T ? 'Trận tối thiểu<br><i>mỗi đội</i>' : 'Ván tối thiểu';
-  $('lblMax').innerHTML = `${T ? 'Trận' : 'Ván'} tối đa<br><i>0 = không giới hạn</i>`;
-  $('lblCap').innerHTML = T ? 'Số đội tối đa<br><i>0 = tất cả</i>' : 'Số người tối đa<br><i>0 = tất cả</i>';
-  $('cfgSummary').textContent =
-    `${MODE[s.cfg.mode]} · ${s.cfg.courts} sân · tối thiểu ${s.cfg.minGames} ${unit}`;
-
-  const box = $('teamNotice');
-  if(!T){ box.classList.add('hide'); return; }
-
-  const r = PBStore.rosterOf(s);
-  const all = PBStore.teamsOf(r), live = PBStore.liveTeams(r), left = PBStore.unteamed(r, true);
-  box.classList.remove('hide');
-
-  if(!all.length){
-    box.innerHTML = `Danh sách <b>${esc(r ? r.name : '')}</b> chưa có đội nào.
-      <div class="actions"><button class="primary" data-quick="balanced">Ghép đội cân bằng trình độ</button>
-      <button data-quick="mixed">Ghép đôi nam nữ</button>
-      <button data-quick="random">Ghép ngẫu nhiên</button></div>`;
-    return;
-  }
-  const bits = [`Dùng <b>${live.length}</b> đội cố định từ danh sách <b>${esc(r.name)}</b>.`];
-  if(live.length < all.length)
-    bits.push(`${all.length - live.length} đội bị loại vì có người chưa tick "Chơi".`);
-  if(left.length)
-    bits.push(`${left.length} người chưa có đội nên không tham gia: ${left.map(p => esc(p.name)).join(', ')}.`);
-  bits.push(`Sửa đội ở mục <b>Danh sách đội</b>.`);
-  box.innerHTML = bits.join(' ');
+/* Ước lượng ngay dưới ô nhập để biết sắp tạo ra bao nhiêu vòng / trận */
+function updateGenHint(){
+  const s  = PBStore.session();
+  const ts = PBStore.teamSetOf(s);
+  const n  = ts ? PBStore.liveTeams(ts).length : 0;
+  if(n < 2){ $('genHint').textContent = ''; return; }
+  const perRound = Math.min(s.cfg.courts, n >> 1);
+  const matches  = Math.ceil(n * s.cfg.minGames / 2);
+  const rounds   = Math.ceil(matches / perRound);
+  $('genHint').textContent =
+    `${n} đội × ${s.cfg.minGames} trận → khoảng ${rounds} vòng, ${matches} trận` +
+    (perRound < s.cfg.courts ? ` — chỉ dùng được ${perRound}/${s.cfg.courts} sân vì có ${n} đội` : '');
 }
 
-$('teamNotice').addEventListener('click', e => {
-  const b = e.target.closest('[data-quick]');
-  if(!b) return;
-  if(buildTeamsFor(PBStore.rosterOf(PBStore.session()), b.dataset.quick)) renderMatches();
-});
-
 function renderRounds(){
-  const s = PBStore.session();
-  const r = PBStore.rosterOf(s);
-  H = r ? PB.hydrate(s, r.players) : null;
+  const s  = PBStore.session();
+  const ts = PBStore.teamSetOf(s);
+  const teams = ts ? PBStore.teamsOf(ts) : [];
+  H = PB.hydrate(s, teams);
 
-  const TEAM = s.cfg.mode === 'teams';
-  TMAP = {};
-  if(TEAM) PBStore.teamsOf(r).forEach(t => { TMAP[t.id] = t; });
-
-  const show = (warn) => {
-    $('standPanel').classList.add('hide');
+  const bare = warn => {
     $('rounds').innerHTML = '';
-    $('warnings').innerHTML = `<div class="warn">${warn}</div>`;
+    $('warnings').innerHTML = warn ? `<div class="warn">${warn}</div>` : '';
   };
-  if(!s.rounds.length){
-    show('Chưa có lịch. Mở <b>Cấu hình chia trận</b> ở trên, chỉnh tuỳ chọn rồi bấm <b>Tạo lịch</b>.');
-    $('cfgPanel').open = true;
-    return;
-  }
-  if(!H){
-    show('Danh sách người chơi đã thay đổi nên lịch cũ không còn khớp. Bấm <b>Tạo lịch</b> để xếp lại.');
-    return;
-  }
 
-  /* --- bảng thống kê: theo đội nếu là chế độ đội cố định, còn lại theo cá nhân --- */
-  $('standPanel').classList.remove('hide');
-  $('standPlayers').classList.toggle('hide', TEAM);
-  $('standTeams').classList.toggle('hide', !TEAM);
+  /* ---- bảng xếp hạng (luôn hiện, kể cả khi chưa có lịch, để xem thống kê cả ngày) ---- */
+  const dayRows = PB.dayStats(PBStore.sessionsOn(S.matchDate), dayTeams(S.matchDate));
+  const sesRows = ts ? PB.teamStats(s, teams) : [];
+  const rows = standScope === 'day' ? dayRows : sesRows;
 
-  const row = (i, label, x) => `
+  $('tabSession').classList.toggle('on', standScope === 'session');
+  $('tabDay').classList.toggle('on', standScope === 'day');
+  $('standTeamBody').innerHTML = rows.map((x, i) => `
     <tr>
       <td class="rk">${i + 1}</td>
-      <td>${label}</td>
+      <td>${esc(PBStore.teamLabel(x.team))}${x.team.name
+        ? `<div class="tmembers">${pairHtml(x.team)}</div>` : ''}</td>
       <td class="num">${x.done}/${x.sched}</td>
       <td class="num">${x.win}</td>
       <td class="num">${x.loss}</td>
       <td class="num">${x.diff > 0 ? '+' : ''}${x.diff}</td>
-    </tr>`;
+    </tr>`).join('');
+  $('standEmpty').classList.toggle('hide', rows.length > 0);
 
-  const tst = TEAM ? PB.teamStats(s, PBStore.teamsOf(r)) : [];
-  if(TEAM){
-    $('standTeamBody').innerHTML = tst.map((x, i) => row(i,
-      `${esc(PBStore.teamLabel(x.team))}${x.team.name
-        ? `<div class="tmembers">${dot(x.team.p1)}${esc(x.team.p1.name)} &amp; ${dot(x.team.p2)}${esc(x.team.p2.name)}</div>` : ''}`,
-      x)).join('');
-  }else{
-    $('standBody').innerHTML = PB.stats(H).map((x, i) =>
-      row(i, dot(x.p) + esc(x.p.name), x)).join('');
-  }
+  const scopeSessions = standScope === 'day' ? PBStore.sessionsOn(S.matchDate) : [s];
+  let all = 0, done = 0;
+  scopeSessions.forEach(x => (x.rounds || []).forEach(r => (r.matches || []).forEach(m => {
+    all++; if(m.win === 1 || m.win === 2) done++;
+  })));
+  $('standMeta').textContent = standScope === 'day'
+    ? `Ngày ${PBStore.showDate(S.matchDate)} · ${scopeSessions.length} danh sách trận · ${done}/${all} trận đã có kết quả`
+    : `${done}/${all} trận đã có kết quả`;
 
-  const all  = H.rounds.reduce((n, x) => n + x.matches.length, 0);
-  const done = H.rounds.reduce((n, x) => n + x.matches.filter(m => m.win).length, 0);
-  $('standMeta').textContent = `${done}/${all} trận đã có kết quả`;
+  /* ---- lịch ---- */
+  if(!s.rounds.length){ bare('Chưa có lịch. Bấm <b>Tạo trận ngẫu nhiên</b> ở trên.'); return; }
+  if(!H){ bare('Danh sách đội đã thay đổi nên lịch cũ không còn khớp. Bấm <b>Tạo trận ngẫu nhiên</b> để xếp lại.'); return; }
 
-  /* --- cảnh báo --- */
+  /* ---- cảnh báo ---- */
   const w = [];
-  const unit = TEAM ? 'trận' : 'ván';
+  const short = sesRows.filter(x => x.sched < s.cfg.minGames);
+  if(short.length)
+    w.push(`Chưa đủ ${s.cfg.minGames} trận cho: <b>${short.map(x=>esc(PBStore.teamLabel(x.team))+' ('+x.sched+')').join(', ')}</b>. Tăng số sân hoặc giảm trận tối thiểu.`);
 
-  if(TEAM){
-    const excluded = PBStore.teamsOf(r).filter(t => !t.p1.active || !t.p2.active);
-    if(excluded.length)
-      w.push(`${excluded.length} đội không tham gia vì có người chưa tick "Chơi": <b>${excluded.map(t=>esc(PBStore.teamLabel(t))).join(', ')}</b>.`);
-    const left = PBStore.unteamed(r, true);
-    if(left.length)
-      w.push(`${left.length} người chưa có đội nên ngồi ngoài: <b>${left.map(p=>esc(p.name)).join(', ')}</b>.`);
-
-    const shortT = tst.filter(x => x.sched < s.cfg.minGames);
-    if(shortT.length)
-      w.push(`Không đủ ${s.cfg.minGames} trận cho: <b>${shortT.map(x=>esc(PBStore.teamLabel(x.team))+' ('+x.sched+')').join(', ')}</b>. Thử tăng số sân hoặc giảm trận tối thiểu.`);
-
-    /* đếm cặp đấu bị lặp — đây là điều chế độ này cố tránh nhất */
-    const met = {};
-    H.rounds.forEach(rd => rd.matches.forEach(m => {
-      if(!m.ta || !m.tb) return;
+  const met = {}, back = [];
+  let prev = {};
+  H.rounds.forEach((rd, ri) => {
+    const now = {};
+    rd.matches.forEach(m => {
       const k = m.ta < m.tb ? m.ta + '|' + m.tb : m.tb + '|' + m.ta;
       met[k] = (met[k] || 0) + 1;
-    }));
-    const keys = Object.keys(met), rep = keys.filter(k => met[k] > 1).length;
-    if(rep)
-      w.push(`Có ${rep}/${keys.length} cặp đấu bị lặp (hai đội gặp nhau hơn 1 lần). Với ${tst.length} đội thì mỗi đội chỉ có ${tst.length - 1} đối thủ khác nhau — muốn hết lặp thì giảm trận tối thiểu xuống ${tst.length - 1} hoặc thêm đội.`);
-  }else{
-    const dropped = r.players.filter(p => p.active && s.playerIds.indexOf(p.id) < 0);
-    if(dropped.length)
-      w.push(`Giới hạn còn ${s.playerIds.length} người — không xếp lịch cho: <b>${dropped.map(p=>esc(p.name)).join(', ')}</b>.`);
-    const short = H.list.filter(p => H.ctx.games[p.id] < s.cfg.minGames);
-    if(short.length)
-      w.push(`Không đủ ${s.cfg.minGames} ván cho: <b>${short.map(p=>esc(p.name)+' ('+H.ctx.games[p.id]+')').join(', ')}</b>. Thử tăng số sân hoặc giảm ván tối thiểu.`);
-
-    const pairs = Object.keys(H.ctx.partner).length;
-    const dup = Object.keys(H.ctx.partner).filter(k => H.ctx.partner[k] > 1).length;
-    if(dup){
-      /* siết ngưỡng lệch rating luôn làm cặp trùng tăng — nói rõ để người dùng biết đường nới */
-      const capped = !s.cfg.ignoreRating && s.cfg.maxGap > 0 && dup > pairs / 3;
-      w.push(`Có ${dup}/${pairs} cặp phải đánh chung nhiều hơn 1 lần` + (capped
-        ? `. Phần lớn là do ngưỡng <b>lệch rating tối đa ${s.cfg.maxGap}</b> đang khá chặt — nới lên ${(s.cfg.maxGap + 0.5).toFixed(2)} hoặc đặt 0 sẽ có nhiều cặp khác nhau hơn.`
-        : ` (không tránh được với số người hiện tại).`));
-    }
-  }
-
-  const gs = H.list.map(p => H.ctx.games[p.id]);
-  const lo = Math.min.apply(null, gs), hi = Math.max.apply(null, gs);
-  if(hi - lo >= 3)
-    w.push(`Chênh lệch số ${unit} khá lớn (${lo}–${hi}).${TEAM ? '' : ' Thường do lệch tỉ lệ nam/nữ ở chế độ đang chọn.'}`);
+      [m.t1, m.t2].forEach(t => {
+        now[t.id] = true;
+        if(prev[t.id]) back.push(`${PBStore.teamLabel(t)} (vòng ${ri}→${ri+1})`);
+      });
+    });
+    prev = now;
+  });
+  const keys = Object.keys(met), rep = keys.filter(k => met[k] > 1).length;
+  if(rep)
+    w.push(`${rep}/${keys.length} cặp đấu bị lặp. Với ${H.list.length} đội thì mỗi đội chỉ có ${H.list.length - 1} đối thủ khác nhau — muốn hết lặp thì giảm trận tối thiểu xuống ${H.list.length - 1} hoặc thêm đội.`);
+  if(back.length)
+    w.push(`${back.length} lượt phải đánh 2 trận liên tiếp: ${back.slice(0, 6).map(esc).join(', ')}${back.length > 6 ? '…' : ''}. Không tránh được khi số đội ít hơn ${s.cfg.courts * 4}.`);
 
   if(!s.cfg.ignoreRating && s.cfg.maxGap > 0){
     const over = [];
@@ -489,22 +538,22 @@ function renderRounds(){
       if(g > s.cfg.maxGap + 1e-9) over.push(`vòng ${ri+1} sân ${ci+1} (lệch ${g.toFixed(2)})`);
     }));
     if(over.length)
-      w.push(`${over.length} trận lệch rating quá ${s.cfg.maxGap}: ${over.join(', ')}. Không tránh được vì những người còn lại trong vòng đó chênh nhau quá nhiều — nới ngưỡng lên hoặc thêm người trình độ trung bình.`);
+      w.push(`${over.length} trận lệch rating quá ${s.cfg.maxGap}: ${over.join(', ')}. Do các đội buộc phải ra sân chênh trình nhau.`);
   }
   $('warnings').innerHTML = w.length
     ? `<div class="warn"><b>Lưu ý</b><ul><li>${w.join('</li><li>')}</li></ul></div>` : '';
 
-  /* --- các vòng --- */
+  /* ---- các vòng ---- */
   const rate = !s.cfg.ignoreRating;
   $('rounds').innerHTML = H.rounds.map((rd, ri) => `
     <div class="round">
       <div class="rhead">
         <span class="rt">Vòng ${ri + 1}</span>
-        <span class="rest">${rd.resting.length ? 'Nghỉ: ' + rd.resting.map(p=>esc(p.name)).join(', ') : 'Tất cả ra sân'}</span>
+        <span class="rest">${rd.resting.length ? 'Nghỉ: ' + rd.resting.map(t => esc(PBStore.teamLabel(t))).join(', ') : 'Tất cả ra sân'}</span>
       </div>
       <div class="rounds-grid">${rd.matches.map((m, ci) => {
         const fin = m.win === 1 || m.win === 2;
-        const g   = PB.gap(m);
+        const g = PB.gap(m);
         const over = s.cfg.maxGap > 0 && g > s.cfg.maxGap + 1e-9;
         return `<button class="match" data-r="${ri}" data-c="${ci}">
           <span class="mhead">
@@ -512,12 +561,12 @@ function renderRounds(){
             <span class="mstate ${fin ? 'done' : ''}">${fin ? '✓ Đã ghi' : 'Chạm để nhập điểm'}</span>
           </span>
           <span class="mteam ${m.win === 1 ? 'win' : ''}">
-            <span class="names">${sideHtml(m, 1)}${rate ? ` <small class="meta">${teamSum(m.t1)}</small>` : ''}</span>
+            <span class="names">${sideHtml(m.t1)}${rate ? ` <small class="meta">${PB.trating(m.t1).toFixed(2)}</small>` : ''}</span>
             <span class="sc">${sv(m.s1)}</span>
           </span>
           <span class="mdiv"></span>
           <span class="mteam ${m.win === 2 ? 'win' : ''}">
-            <span class="names">${sideHtml(m, 2)}${rate ? ` <small class="meta">${teamSum(m.t2)}</small>` : ''}</span>
+            <span class="names">${sideHtml(m.t2)}${rate ? ` <small class="meta">${PB.trating(m.t2).toFixed(2)}</small>` : ''}</span>
             <span class="sc">${sv(m.s2)}</span>
           </span>
         </button>`;
@@ -525,17 +574,22 @@ function renderRounds(){
     </div>`).join('');
 }
 
-/* ---- chọn / tạo / sửa buổi trận ---- */
-$('sessionSel').onchange = () => { S.sessionId = $('sessionSel').value; PBStore.saveLocal(); renderMatches(); };
-$('btnSessionNew').onclick = () => {
-  PBStore.addSession();
+$('mDate').onchange = () => {
+  S.matchDate = PBStore.normDate($('mDate').value);
+  PBStore.saveLocal();
   renderMatches();
+};
+$('btnMDateToday').onclick = () => { S.matchDate = PBStore.today(); PBStore.saveLocal(); renderMatches(); };
+$('sessionSel').onchange = () => { S.sessionId = $('sessionSel').value; PBStore.saveLocal(); renderMatches(); };
+
+$('btnSessionNew').onclick = () => {
+  PBStore.addSession(S.matchDate);
+  render();
   PBStore.save();
-  $('cfgPanel').open = true;
 };
 $('btnSessionRename').onclick = () => {
   const s = PBStore.session();
-  const n = prompt('Đổi tên buổi trận:', s.name);
+  const n = prompt('Đổi tên danh sách trận:', s.name);
   if(n === null || !n.trim()) return;
   s.name = n.trim().slice(0, 60);
   render();
@@ -543,17 +597,29 @@ $('btnSessionRename').onclick = () => {
 };
 $('btnSessionDel').onclick = () => {
   const s = PBStore.session();
-  if(!confirm(`Xoá buổi trận "${s.name}"? Kết quả đã nhập sẽ mất.`)) return;
+  if(!confirm(`Xoá danh sách trận "${s.name}"? Kết quả đã nhập sẽ mất.`)) return;
   PBStore.removeSession(s.id);
   render();
   PBStore.save();
 };
 $('noSession').onclick = () => $('btnSessionNew').click();
 
-function readCfg(){
+$('cTeamSet').onchange = () => {
   const s = PBStore.session();
-  s.cfg = PBStore.normCfg({
-    mode:         $('cMode').value,
+  if(s.rounds.length && !confirm('Đổi danh sách đội sẽ xoá lịch và kết quả của danh sách trận này. Tiếp tục?')){
+    $('cTeamSet').value = s.teamSetId;
+    return;
+  }
+  s.teamSetId = $('cTeamSet').value;
+  s.rounds = [];
+  renderMatches();
+  PBStore.save();
+};
+
+$('btnCfgToggle').onclick = () => $('cfgBody').classList.toggle('hide');
+
+function readCfg(){
+  PBStore.session().cfg = PBStore.normCfg({
     courts:       $('cCourts').value,
     minGames:     $('cMin').value,
     maxGames:     $('cMax').value,
@@ -561,80 +627,56 @@ function readCfg(){
     maxGap:       $('cMaxGap').value,
     ignoreRating: $('cIgnoreRating').checked,
   });
-  $('cMaxGap').disabled = s.cfg.ignoreRating;
-  applyMode(s);        // đổi chế độ phải đổi luôn nhãn các ô và ô thông tin đội
+  $('cMaxGap').disabled = PBStore.session().cfg.ignoreRating;
 }
-['cMode','cCourts','cMin','cMax','cCap','cMaxGap','cIgnoreRating'].forEach(id =>
-  $(id).addEventListener('change', () => { readCfg(); PBStore.save(); }));
+['cCourts','cMin','cMax','cCap','cMaxGap','cIgnoreRating'].forEach(id =>
+  $(id).addEventListener('change', () => { readCfg(); updateGenHint(); PBStore.save(); }));
 
-$('cRoster').onchange = () => {
-  const s = PBStore.session();
-  if(s.rounds.length && !confirm('Đổi danh sách sẽ xoá lịch và kết quả của buổi này. Tiếp tục?')){
-    $('cRoster').value = s.rosterId;
-    return;
-  }
-  s.rosterId = $('cRoster').value;
-  s.rounds = []; s.playerIds = [];
-  renderMatches();
-  PBStore.save();
-};
+Array.prototype.forEach.call(document.querySelectorAll('.tab'), b => {
+  b.onclick = () => { standScope = b.dataset.scope; renderRounds(); };
+});
 
-function doGenerate(){
-  const s = PBStore.session();
-  const r = PBStore.rosterOf(s);
-  if(!r){ toast('Buổi trận chưa gắn với danh sách nào'); return; }
+$('btnGen').onclick = () => {
+  const s  = PBStore.session();
+  const ts = PBStore.teamSetOf(s);
+  if(!ts){ toast('Chưa chọn danh sách đội'); return; }
   if(PBStore.hasResults(s) &&
-     !confirm('Buổi này đã có kết quả. Tạo lịch mới sẽ xoá toàn bộ điểm đã nhập. Tiếp tục?')) return;
+     !confirm('Danh sách trận này đã có kết quả. Tạo lại sẽ xoá toàn bộ điểm đã nhập. Tiếp tục?')) return;
 
   readCfg();
-  const TEAM = s.cfg.mode === 'teams';
-  const res = TEAM
-    ? PB.generateTeams(PBStore.liveTeams(r), s.cfg)
-    : PB.generate(r.players.filter(p => p.active), s.cfg);
-
+  const res = PB.generate(PBStore.liveTeams(ts), s.cfg);
   if(res.error){
-    s.rounds = []; s.playerIds = [];
+    s.rounds = [];
     renderMatches();
     $('warnings').innerHTML = `<div class="warn">${esc(res.error)}</div>`;
     PBStore.save();
     toast(res.error);
     return;
   }
-
-  if(TEAM){
-    s.playerIds = [];
-    res.list.forEach(t => s.playerIds.push(t.p1.id, t.p2.id));
-    s.rounds = PB.toTeamRounds(res);
-  }else{
-    s.playerIds = res.list.map(p => p.id);
-    s.rounds    = PB.toRounds(res);
-  }
+  s.rounds = PB.toRounds(res);
   PBStore.save();
   renderMatches();
-  $('cfgPanel').open = false;
-  toast(`Đã tạo ${s.rounds.length} vòng · ${s.rounds.reduce((n,x)=>n+x.matches.length,0)} trận`);
-}
-$('btnGen').onclick   = doGenerate;
-$('btnRegen').onclick = doGenerate;
+  toast(`${s.rounds.length} vòng · ${s.rounds.reduce((n,x)=>n+x.matches.length,0)} trận`);
+};
 
 /* ---- xuất ---- */
 function asText(){
   const s = PBStore.session();
   if(!s || !H) return '';
-  let out = `${s.name.toUpperCase()} — ${MODE[s.cfg.mode]}\n${H.list.length} người · ${s.cfg.courts} sân · ${H.rounds.length} vòng\n`;
+  let out = `${s.name.toUpperCase()} — ngày ${PBStore.showDate(s.date)}\n${H.list.length} đội · ${s.cfg.courts} sân · ${H.rounds.length} vòng\n`;
   H.rounds.forEach((rd, i) => {
     out += `\n--- VÒNG ${i + 1} ---\n`;
     rd.matches.forEach((m, c) => {
       const sc = (m.win === 1 || m.win === 2) ? `  [${sv(m.s1)}-${sv(m.s2)}]` : '';
-      out += `Sân ${c+1}: ${sideText(m, 1)}  vs  ${sideText(m, 2)}${sc}\n`;
+      out += `Sân ${c+1}: ${sideText(m.t1)}  vs  ${sideText(m.t2)}${sc}\n`;
     });
-    if(rd.resting.length) out += `Nghỉ: ${rd.resting.map(p=>p.name).join(', ')}\n`;
+    if(rd.resting.length) out += `Nghỉ: ${rd.resting.map(t => PBStore.teamLabel(t)).join(', ')}\n`;
   });
-  const st = PB.stats(H);
+  const st = PB.teamStats(s, H.list);
   if(st.some(x => x.done)){
-    out += `\n--- THỐNG KÊ ---\n`;
+    out += `\n--- BẢNG XẾP HẠNG ---\n`;
     st.forEach((x, i) => {
-      out += `${i+1}. ${x.p.name}: ${x.done} trận, thắng ${x.win}, thua ${x.loss} (${x.diff > 0 ? '+' : ''}${x.diff})\n`;
+      out += `${i+1}. ${PBStore.teamLabel(x.team)}: ${x.done} trận, thắng ${x.win}, thua ${x.loss} (${x.diff > 0 ? '+' : ''}${x.diff})\n`;
     });
   }
   return out;
@@ -667,8 +709,8 @@ function openSheet(ri, ci){
   if(!m || !h) return;
   sheetRef = { ri, ci };
   $('sheetTitle').textContent = `Vòng ${ri + 1} · Sân ${ci + 1}`;
-  $('sNames1').innerHTML = sideHtml(h, 1);
-  $('sNames2').innerHTML = sideHtml(h, 2);
+  $('sNames1').innerHTML = sideHtml(h.t1);
+  $('sNames2').innerHTML = sideHtml(h.t2);
   $('sScore1').value = m.s1 === null ? '' : m.s1;
   $('sScore2').value = m.s2 === null ? '' : m.s2;
   setWin(m.win);
@@ -726,11 +768,7 @@ $('sheetClear').onclick = () => {
 };
 
 /* ============================ ĐỒNG BỘ ============================ */
-const STATUS = {
-  connecting: 'Đang kết nối…',
-  error:      'Mất kết nối',
-  off:        'Chưa kết nối',
-};
+const STATUS = { connecting:'Đang kết nối…', error:'Mất kết nối', off:'Chưa kết nối' };
 
 function setStatus(st, msg){
   const on = st === 'live';
@@ -750,14 +788,14 @@ function normRoom(s){
 }
 
 function applyRemote(d){
-  closeSheet();                       // chỉ số trận có thể đổi -> đóng sheet cho chắc
+  closeSheet();
   PBStore.applyRemote(d);
   render();
   toast('Có cập nhật từ thành viên khác');
 }
 
 /* ---------------- cổng vào ---------------- */
-let pendingRoom = null;               // nhóm đang chờ, để nút "dùng dữ liệu đã lưu" biết vào nhóm nào
+let pendingRoom = null;
 
 function gateMsg(html, offlineFor){
   $('gateErr').innerHTML = html;
@@ -766,7 +804,6 @@ function gateMsg(html, offlineFor){
   $('gateOfflineWrap').classList.toggle('hide', !offlineFor);
 }
 function gateClear(){ gateMsg(''); }
-$('btnOffline').onclick = () => { if(pendingRoom) openApp(pendingRoom, true); };
 function gateBusy(on){
   $('btnEnter').disabled = on;
   $('gateRoom').disabled = on;
@@ -780,6 +817,7 @@ function renderGate(){
     `<div class="growl"><button class="grow" data-room="${esc(id)}">${esc(id)}</button>` +
     `<button class="icon danger" data-forget="${esc(id)}" title="Xoá khỏi danh sách">✕</button></div>`).join('');
 }
+$('btnOffline').onclick = () => { if(pendingRoom) openApp(pendingRoom, true); };
 $('gateList').addEventListener('click', e => {
   const f = e.target.closest('[data-forget]');
   if(f){
@@ -795,11 +833,10 @@ $('gateList').addEventListener('click', e => {
 $('btnEnter').onclick = () => enterRoom($('gateRoom').value);
 $('gateRoom').addEventListener('keydown', e => { if(e.key === 'Enter') $('btnEnter').click(); });
 
-/* Dữ liệu cũ nằm ngoài mọi nhóm -> hỏi có đưa vào nhóm vừa tạo không */
 function importLegacy(id){
   const L = PBStore.legacy();
   if(!L) return;
-  if(confirm(`Máy này còn dữ liệu cũ chưa thuộc nhóm nào: ${L.rosters.length} danh sách người chơi, ${L.sessions.length} buổi trận.\n\nĐưa vào nhóm "${id}" vừa tạo?`))
+  if(confirm(`Máy này còn dữ liệu cũ chưa thuộc nhóm nào: ${L.rosters.length} danh sách người chơi, ${L.teamSets.length} danh sách đội, ${L.sessions.length} danh sách trận.\n\nĐưa vào nhóm "${id}" vừa tạo?`))
     PBStore.applyRemote(L);
   PBStore.dropLegacy();
 }
@@ -813,7 +850,7 @@ async function enterRoom(raw){
   gateBusy(true);
   gateClear();
 
-  const cached = PBStore.load(id);     // nạp cache của nhóm này (có thể rỗng)
+  const cached = PBStore.load(id);
 
   let remote = null;
   try{
@@ -826,10 +863,10 @@ async function enterRoom(raw){
   }
 
   if(remote) PBStore.applyRemote(remote);
-  else       importLegacy(id);         // nhóm mới toanh
+  else       importLegacy(id);
 
   openApp(id);
-  if(!remote) PBStore.save(true);      // đẩy dữ liệu khởi tạo lên cho nhóm mới
+  if(!remote) PBStore.save(true);
   toast(remote ? `Đã vào nhóm ${id}` : `Đã tạo nhóm ${id}`);
 }
 
@@ -842,6 +879,8 @@ function openApp(id, offline){
   if(offline) setStatus('error', 'chưa kết nối được');
   location.hash = 'room=' + id;
   render();
+  const n = PBStore.note();
+  if(n){ PBStore.setNote(''); toast(n); }
 }
 
 $('btnSwitch').onclick = () => {
@@ -856,9 +895,8 @@ $('btnSwitch').onclick = () => {
 };
 $('btnReconnect').onclick = () => {
   if(!currentRoom) return;
-  const id = currentRoom;
   setDrawer(false);
-  PBSync.connect(id, applyRemote, setStatus)
+  PBSync.connect(currentRoom, applyRemote, setStatus)
     .then(remote => {
       if(remote){ PBStore.applyRemote(remote); render(); }
       else PBStore.save(true);
@@ -874,7 +912,6 @@ $('btnShare').onclick = async () => {
 
 /* ============================ KHỞI ĐỘNG ============================ */
 if(!PBSync.configured()){
-  /* Chưa cấu hình Firebase: không có khái niệm nhóm, chạy thẳng ở chế độ một máy. */
   PBStore.load('_local');
   $('gate').classList.add('hide');
   $('syncBox').innerHTML =
@@ -884,7 +921,7 @@ if(!PBSync.configured()){
 }else{
   renderGate();
   const m = /room=([a-z0-9-]+)/i.exec(location.hash);
-  if(m) enterRoom(m[1]);               // mở bằng link mời -> vào thẳng, bỏ qua cổng
+  if(m) enterRoom(m[1]);
   else $('gateRoom').focus();
 }
 

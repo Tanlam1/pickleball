@@ -19,11 +19,13 @@ service cloud.firestore {
       // Chặn ghi rác: đúng bộ field, giới hạn kích thước
       function validData() {
         let d = request.resource.data;
-        return d.keys().hasOnly(['rosters', 'sessions', 'updatedAt', 'updatedBy'])
+        return d.keys().hasOnly(['rosters', 'teamSets', 'sessions', 'updatedAt', 'updatedBy'])
             && d.rosters is list
             && d.rosters.size() <= 50
+            && d.teamSets is list
+            && d.teamSets.size() <= 500
             && d.sessions is list
-            && d.sessions.size() <= 200
+            && d.sessions.size() <= 500
             && d.updatedBy is string
             && d.updatedBy.size() <= 40
             && d.updatedAt is timestamp;

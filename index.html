@@ -134,114 +134,137 @@
 <!-- ============ 2. DANH SÁCH ĐỘI ============ -->
 <section id="viewTeams" class="hide">
   <div class="panel">
+    <label for="tDate">Ngày tạo đội</label>
     <div class="picker">
-      <select id="tRosterSel" aria-label="Chọn danh sách người chơi"></select>
+      <input type="date" id="tDate">
+      <button class="icon sq" id="btnTDateToday" title="Hôm nay">Hôm nay</button>
     </div>
-    <p class="meta" id="tcount"></p>
   </div>
 
   <div class="panel">
-    <div class="phead">
-      <h2>Ghép đội tự động</h2>
-      <span class="meta">Đội ghép xong là cố định — dùng lại cho mọi buổi trận</span>
+    <label for="tSetSel">Danh sách đội</label>
+    <div class="picker">
+      <select id="tSetSel" aria-label="Chọn danh sách đội"></select>
+      <button class="icon sq" id="btnTSetNew" title="Tạo danh sách đội mới">＋</button>
+      <button class="icon sq" id="btnTSetRename" title="Đổi tên">✎</button>
+      <button class="icon sq danger" id="btnTSetDel" title="Xoá">🗑</button>
     </div>
-    <div class="actions" style="margin-top:0">
-      <button class="primary" id="btnTeamBalanced">Cân bằng trình độ</button>
-      <button id="btnTeamMixed">Đôi nam nữ</button>
-      <button id="btnTeamRandom">Ngẫu nhiên</button>
-    </div>
-    <p class="hint">Chỉ ghép cho người đang tick <b>Chơi</b> ở màn hình Danh sách người chơi.
-      Ghép lại sẽ thay toàn bộ đội hiện có.</p>
+    <p class="meta" id="tSetMeta"></p>
   </div>
 
-  <div class="panel">
-    <div class="phead"><h2>Các đội</h2><span class="meta" id="tmeta"></span></div>
-    <div class="tscroll"><table>
-      <thead><tr>
-        <th class="w-rk">#</th><th>Đội</th><th class="w-rt">Tổng</th><th class="w-x"></th>
-      </tr></thead>
-      <tbody id="tlist"></tbody>
-    </table></div>
-    <p class="empty" id="tempty">Chưa có đội nào. Bấm một trong ba nút ghép tự động ở trên.</p>
+  <p class="empty panel" id="noTeamSet">Ngày này chưa có danh sách đội nào. Bấm <b>＋</b> ở trên để tạo.</p>
 
-    <div class="row" style="margin-top:14px">
-      <div><label>Ghép thủ công</label><select id="tPickA"></select></div>
-      <div><label>&nbsp;</label><select id="tPickB"></select></div>
-      <div class="f-auto"><button class="primary" id="btnTeamAdd">Tạo đội</button></div>
+  <div id="teamBody" class="hide">
+    <div class="panel">
+      <label for="tRosterSel">Ghép từ danh sách người chơi</label>
+      <select id="tRosterSel"></select>
+      <p class="meta" id="tcount" style="margin-top:8px"></p>
+
+      <div class="phead" style="margin-top:16px"><h2>Tạo đội</h2></div>
+      <div class="actions" style="margin-top:0">
+        <button class="primary" id="btnTeamMale">Đôi nam</button>
+        <button class="primary" id="btnTeamFemale">Đôi nữ</button>
+        <button class="primary" id="btnTeamMixed">Đôi nam nữ</button>
+        <button id="btnTeamRandom">Ngẫu nhiên</button>
+      </div>
+      <p class="hint">Kiểu nào cũng ghép mạnh với yếu để <b>các đội ngang trình độ nhau</b>.
+        Chỉ lấy người đang tick <b>Chơi</b>. Ghép lại sẽ thay toàn bộ đội trong danh sách này.</p>
     </div>
-    <p class="hint" id="tleft"></p>
+
+    <div class="panel">
+      <div class="phead"><h2>Các đội</h2><span class="meta" id="tmeta"></span></div>
+      <div class="tscroll"><table>
+        <thead><tr>
+          <th class="w-rk">#</th><th>Đội</th><th class="w-rt">Tổng</th><th class="w-x"></th>
+        </tr></thead>
+        <tbody id="tlist"></tbody>
+      </table></div>
+      <p class="empty" id="tempty">Chưa có đội nào. Bấm một trong bốn nút ghép ở trên.</p>
+
+      <div class="row" style="margin-top:14px">
+        <div><label>Ghép thủ công</label><select id="tPickA"></select></div>
+        <div><label>&nbsp;</label><select id="tPickB"></select></div>
+        <div class="f-auto"><button class="primary" id="btnTeamAdd">Tạo đội</button></div>
+      </div>
+      <p class="hint" id="tleft"></p>
+    </div>
   </div>
 </section>
 
 <!-- ============ 3. TẠO TRẬN ============ -->
 <section id="viewMatches" class="hide">
   <div class="panel">
+    <label for="mDate">Ngày thi đấu</label>
     <div class="picker">
-      <select id="sessionSel" aria-label="Chọn buổi trận"></select>
-      <button class="icon sq" id="btnSessionNew" title="Tạo buổi trận mới">＋</button>
-      <button class="icon sq" id="btnSessionRename" title="Đổi tên">✎</button>
-      <button class="icon sq danger" id="btnSessionDel" title="Xoá buổi trận">🗑</button>
+      <input type="date" id="mDate">
+      <button class="icon sq" id="btnMDateToday" title="Hôm nay">Hôm nay</button>
     </div>
   </div>
 
-  <p class="empty panel" id="noSession">Chưa có buổi trận nào. Bấm <b>＋</b> ở trên để tạo.</p>
+  <div class="panel">
+    <label for="sessionSel">Danh sách trận</label>
+    <div class="picker">
+      <select id="sessionSel" aria-label="Chọn danh sách trận"></select>
+      <button class="icon sq" id="btnSessionNew" title="Tạo danh sách trận mới">＋</button>
+      <button class="icon sq" id="btnSessionRename" title="Đổi tên">✎</button>
+      <button class="icon sq danger" id="btnSessionDel" title="Xoá">🗑</button>
+    </div>
+  </div>
+
+  <p class="empty panel" id="noSession">Ngày này chưa có danh sách trận nào. Bấm <b>＋</b> ở trên để tạo.</p>
 
   <div id="sessionBody" class="hide">
-    <details class="panel" id="cfgPanel">
-      <summary>Cấu hình chia trận <span class="meta" id="cfgSummary"></span></summary>
-      <div class="cfgbody">
-        <div class="row">
-          <div><label>Dùng danh sách</label><select id="cRoster"></select></div>
-          <div><label>Chế độ chia</label><select id="cMode">
-            <option value="mixed">Đôi nam nữ (mỗi đội 1 nam + 1 nữ)</option>
-            <option value="split">Tách nam nữ (đôi nam riêng, đôi nữ riêng)</option>
-            <option value="free">Ngẫu nhiên tự do</option>
-            <option value="teams">Đội cố định (dùng danh sách đội)</option>
-          </select></div>
-        </div>
+    <div class="panel">
+      <label for="cTeamSet">Danh sách đội</label>
+      <select id="cTeamSet"></select>
+      <div id="teamNotice" class="warn hide" style="margin-top:10px"></div>
 
-        <div id="teamNotice" class="warn hide"></div>
+      <div class="row" style="margin-top:14px">
+        <div><label for="cCourts">Số sân</label>
+          <input type="number" id="cCourts" min="1" max="20" inputmode="numeric"></div>
+        <div><label for="cMin">Số trận mỗi đội</label>
+          <input type="number" id="cMin" min="1" max="50" inputmode="numeric"></div>
+      </div>
+      <p class="meta" id="genHint"></p>
 
+      <div class="actions">
+        <button class="primary" id="btnGen" style="flex:2 1 auto">Tạo trận ngẫu nhiên</button>
+        <button id="btnCfgToggle">Tuỳ chọn khác</button>
+      </div>
+      <p class="hint">Ưu tiên: không gặp lại đội đã đấu → không đánh 2 trận liên tiếp →
+        hai đội ngang trình độ. Ít đội quá thì đành chịu lặp, app sẽ báo rõ.</p>
+
+      <div class="cfgbody hide" id="cfgBody">
         <div class="row">
-          <div class="f-sm"><label>Số sân</label>
-            <input type="number" id="cCourts" min="1" max="20" inputmode="numeric"></div>
-          <div class="f-sm"><label id="lblMin">Ván tối thiểu</label>
-            <input type="number" id="cMin" min="1" max="50" inputmode="numeric"></div>
-          <div class="f-sm"><label id="lblMax">Ván tối đa<br><i>0 = không giới hạn</i></label>
+          <div class="f-sm"><label>Trận tối đa<br><i>0 = không giới hạn</i></label>
             <input type="number" id="cMax" min="0" max="50" inputmode="numeric"></div>
-          <div class="f-sm"><label id="lblCap">Số người tối đa<br><i>0 = tất cả</i></label>
-            <input type="number" id="cCap" min="0" max="200" inputmode="numeric"></div>
+          <div class="f-sm"><label>Số đội tối đa<br><i>0 = tất cả</i></label>
+            <input type="number" id="cCap" min="0" max="100" inputmode="numeric"></div>
           <div class="f-sm"><label>Lệch rating tối đa<br><i>0 = không giới hạn</i></label>
             <input type="number" id="cMaxGap" min="0" max="10" step="0.25" inputmode="decimal"></div>
         </div>
         <label class="check"><input type="checkbox" id="cIgnoreRating">
-          Bỏ qua rating — chia không quan tâm trình độ</label>
-        <div class="actions">
-          <button class="primary" id="btnGen">Tạo lịch</button>
-          <button id="btnRegen">Tạo lại (xáo khác)</button>
-        </div>
+          Bỏ qua rating — xếp trận không quan tâm trình độ</label>
       </div>
-    </details>
+    </div>
 
     <div class="panel" id="standPanel">
       <div class="phead">
-        <h2>Bảng thống kê</h2>
+        <h2>Bảng xếp hạng</h2>
         <span class="meta" id="standMeta"></span>
       </div>
-      <div class="tscroll" id="standPlayers"><table class="stats">
-        <thead><tr>
-          <th class="w-rk">#</th><th>Tên</th>
-          <th class="num">Đấu</th><th class="num">Thắng</th><th class="num">Thua</th><th class="num">+/−</th>
-        </tr></thead>
-        <tbody id="standBody"></tbody>
-      </table></div>
-      <div class="tscroll hide" id="standTeams"><table class="stats">
+      <div class="tabs">
+        <button class="tab on" id="tabSession" data-scope="session">Danh sách này</button>
+        <button class="tab" id="tabDay" data-scope="day">Cả ngày thi đấu</button>
+      </div>
+      <div class="tscroll"><table class="stats">
         <thead><tr>
           <th class="w-rk">#</th><th>Đội</th>
           <th class="num">Đấu</th><th class="num">Thắng</th><th class="num">Thua</th><th class="num">+/−</th>
         </tr></thead>
         <tbody id="standTeamBody"></tbody>
       </table></div>
+      <p class="empty hide" id="standEmpty">Chưa có trận nào.</p>
     </div>
 
     <div id="warnings"></div>

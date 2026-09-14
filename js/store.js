@@ -1,27 +1,34 @@
-/* store.js — trạng thái ứng dụng: nhiều danh sách người chơi, nhiều buổi trận.
-   Lưu localStorage và đẩy lên Firestore (nếu đang đồng bộ). */
+/* store.js — trạng thái ứng dụng.
+   Ba thực thể:
+     rosters  — danh sách người chơi
+     teamSets — danh sách đội, gắn với MỘT NGÀY và một danh sách người chơi
+     sessions — danh sách trận, gắn với MỘT NGÀY và một danh sách đội
+   Mỗi nhóm (room) có cache riêng trên máy để không lẫn dữ liệu giữa các nhóm. */
 (function (root) {
 'use strict';
 
-/* Mỗi nhóm có cache riêng: pb_room_<mã nhóm>. Không dùng chung một chỗ lưu nữa
-   để dữ liệu các nhóm không lẫn vào nhau khi đổi qua lại. */
 const LS_ROOM  = 'pb_room_';
-const LS_ROOMS = 'pb_rooms';               // danh sách nhóm gần đây + nhóm dùng lần cuối
-const LS_V3    = 'pb_v3';                  // bản chưa có nhóm (một máy một dữ liệu)
-const LS_V2    = 'pb_scheduler_v2';        // bản một-danh-sách trước nữa
+const LS_ROOMS = 'pb_rooms';
+const LS_V3    = 'pb_v3';                  // bản chưa có nhóm
+const LS_V2    = 'pb_scheduler_v2';        // bản một-danh-sách
 
 const S = {
-  roomId:   null,    // mã nhóm đang mở ('_local' khi chưa cấu hình Firebase)
-  rosters:  [],      // [{ id, name, players:[...], teams:[...] }]
-  sessions: [],      // [{ id, name, rosterId, cfg, playerIds, rounds, createdAt }]
-  view:     'players',
-  rosterId: null,
-  sessionId:null,
+  roomId:    null,
+  rosters:   [],
+  teamSets:  [],
+  sessions:  [],
+  view:      'players',
+  rosterId:  null,
+  teamSetId: null,
+  sessionId: null,
+  teamDate:  null,   // ngày đang chọn ở màn hình đội
+  matchDate: null,   // ngày đang chọn ở màn hình trận
 };
 
-let applying = false;                       // đang áp dữ liệu từ xa -> không đẩy ngược lên
+let applying = false;
+let migrateNote = '';                      // thông báo một lần sau khi chuyển đổi dữ liệu cũ
 
-/* ---------------- chuẩn hoá (cũng là lớp chắn dữ liệu lạ từ phòng chung) ---------------- */
+/* ---------------- tiện ích ---------------- */
 const clamp = (v, lo, hi, d) => {
   const n = parseFloat(v);
   return isNaN(n) ? d : Math.min(hi, Math.max(lo, n));
@@ -32,6 +39,22 @@ const text = (v, max, d) => {
 };
 const sc = v => (v === null || v === undefined || v === '') ? null : clamp(v, 0, 99, null);
 
+function today(){
+  const d = new Date();
+  const p = n => (n < 10 ? '0' : '') + n;
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+const isDate = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+const normDate = s => isDate(s) ? s : today();
+
+/* dd/mm để hiển thị cho gọn */
+function showDate(s){
+  if(!isDate(s)) return s || '';
+  const p = s.split('-');
+  return `${p[2]}/${p[1]}/${p[0]}`;
+}
+
+/* ---------------- chuẩn hoá ---------------- */
 function normPlayer(p){
   p = p || {};
   return {
@@ -44,51 +67,49 @@ function normPlayer(p){
 }
 function normRoster(r){
   r = r || {};
-  const players = (Array.isArray(r.players) ? r.players : []).slice(0, 200).map(normPlayer);
-  const ids = {};
-  players.forEach(p => { ids[p.id] = true; });
-
-  /* Đội chỉ hợp lệ khi cả 2 người còn trong danh sách, khác nhau,
-     và mỗi người chỉ thuộc đúng một đội. */
-  const taken = {};
-  const teams = (Array.isArray(r.teams) ? r.teams : []).slice(0, 100).map(t => ({
-    id:   String((t && t.id) || PB.newId('t')),
-    name: text(t && t.name, 40, ''),
-    a:    String((t && t.a) || ''),
-    b:    String((t && t.b) || ''),
-  })).filter(t => {
-    if(!ids[t.a] || !ids[t.b] || t.a === t.b) return false;
-    if(taken[t.a] || taken[t.b]) return false;
-    taken[t.a] = taken[t.b] = true;
-    return true;
-  });
-
   return {
     id:      String(r.id || PB.newId('r')),
     name:    text(r.name, 60, 'Danh sách'),
-    players: players,
-    teams:   teams,
+    players: (Array.isArray(r.players) ? r.players : []).slice(0, 200).map(normPlayer),
+  };
+}
+function normTeamSet(t){
+  t = t || {};
+  const taken = {};
+  return {
+    id:       String(t.id || PB.newId('ts')),
+    date:     normDate(t.date),
+    name:     text(t.name, 60, 'Danh sách đội'),
+    rosterId: String(t.rosterId || ''),
+    /* mỗi người chỉ thuộc một đội, hai người trong đội phải khác nhau */
+    teams: (Array.isArray(t.teams) ? t.teams : []).slice(0, 100).map(x => ({
+      id:   String((x && x.id) || PB.newId('t')),
+      name: text(x && x.name, 40, ''),
+      a:    String((x && x.a) || ''),
+      b:    String((x && x.b) || ''),
+    })).filter(x => {
+      if(!x.a || !x.b || x.a === x.b || taken[x.a] || taken[x.b]) return false;
+      taken[x.a] = taken[x.b] = true;
+      return true;
+    }),
   };
 }
 function normCfg(c){
   c = c || {};
   return {
-    mode:         ['mixed','split','free','teams'].indexOf(c.mode) >= 0 ? c.mode : 'mixed',
     courts:       clamp(c.courts,   1,  20, 2),
-    minGames:     clamp(c.minGames, 1,  50, 4),
+    minGames:     clamp(c.minGames, 1,  50, 3),
     maxGames:     clamp(c.maxGames, 0,  50, 0),
-    cap:          clamp(c.cap,      0, 200, 0),
-    maxGap:       clamp(c.maxGap,   0,  10, 1),    // lệch tổng rating tối đa mỗi trận, 0 = không giới hạn
+    cap:          clamp(c.cap,      0, 100, 0),    // số đội tối đa
+    maxGap:       clamp(c.maxGap,   0,  10, 1),
     ignoreRating: !!c.ignoreRating,
   };
 }
 function normMatch(m){
   m = m || {};
   return {
-    a:  (Array.isArray(m.a) ? m.a : []).slice(0, 2).map(String),
-    b:  (Array.isArray(m.b) ? m.b : []).slice(0, 2).map(String),
-    ta: m.ta ? String(m.ta) : null,      // id đội (chỉ có ở chế độ đội cố định)
-    tb: m.tb ? String(m.tb) : null,
+    ta: String((m && m.ta) || ''),
+    tb: String((m && m.tb) || ''),
     s1: sc(m.s1),
     s2: sc(m.s2),
     win: (m.win === 1 || m.win === 2) ? m.win : null,
@@ -98,58 +119,99 @@ function normSession(s){
   s = s || {};
   return {
     id:        String(s.id || PB.newId('s')),
-    name:      text(s.name, 60, 'Buổi mới'),
-    rosterId:  String(s.rosterId || ''),
+    date:      normDate(s.date),
+    name:      text(s.name, 60, 'Danh sách trận'),
+    teamSetId: String(s.teamSetId || ''),
     cfg:       normCfg(s.cfg),
-    playerIds: (Array.isArray(s.playerIds) ? s.playerIds : []).slice(0, 200).map(String),
     rounds:    (Array.isArray(s.rounds) ? s.rounds : []).slice(0, 200)
-                 .map(r => ({ matches: (Array.isArray(r && r.matches) ? r.matches : []).slice(0, 20).map(normMatch) })),
-    createdAt: clamp(s.createdAt, 0, 1e15, 0),
+                 .map(r => ({ matches: (Array.isArray(r && r.matches) ? r.matches : []).slice(0, 20)
+                                .map(normMatch).filter(m => m.ta && m.tb) })),
   };
 }
 
 /* ---------------- đọc / ghi ---------------- */
-function data(){ return { rosters: S.rosters, sessions: S.sessions }; }
+function data(){ return { rosters: S.rosters, teamSets: S.teamSets, sessions: S.sessions }; }
 
 function saveLocal(){
   if(!S.roomId) return;
   try{
     localStorage.setItem(LS_ROOM + S.roomId, JSON.stringify({
-      rosters: S.rosters, sessions: S.sessions,
-      rosterId: S.rosterId, sessionId: S.sessionId, view: S.view,
+      rosters: S.rosters, teamSets: S.teamSets, sessions: S.sessions,
+      rosterId: S.rosterId, teamSetId: S.teamSetId, sessionId: S.sessionId,
+      teamDate: S.teamDate, matchDate: S.matchDate, view: S.view,
     }));
   }catch(e){}
 }
-
-/* now = true khi vừa nhập điểm: đẩy ngay để người khác thấy liền */
 function save(now){
   saveLocal();
   if(!applying && root.PBSync) PBSync.push(data(), now);
 }
 
-/* Nạp cache của một nhóm. Trả về true nếu máy này đã có dữ liệu của nhóm đó. */
+/* Nhận cả dữ liệu cấu trúc cũ (đội nằm trong roster, buổi trận có cfg.mode):
+   thiếu hẳn teamSets nghĩa là bản cũ -> chuyển đổi tại chỗ. */
+function put(d){
+  if(d && !Array.isArray(d.teamSets) && Array.isArray(d.rosters) && d.rosters.length){
+    const c = convertLegacy(d);
+    if(c){
+      S.rosters  = c.rosters;
+      S.teamSets = c.teamSets;
+      S.sessions = c.sessions;
+      if(c.dropped)
+        migrateNote = `${c.dropped} danh sách trận kiểu cũ (chia theo từng người) không chuyển sang mô hình đội được nên đã bỏ.`;
+      return;
+    }
+  }
+  S.rosters  = ((d && d.rosters)  || []).map(normRoster);
+  S.teamSets = ((d && d.teamSets) || []).map(normTeamSet);
+  S.sessions = ((d && d.sessions) || []).map(normSession);
+}
+
 function load(roomId){
-  S.roomId    = roomId;
-  S.rosters   = [];
-  S.sessions  = [];
-  S.rosterId  = null;
-  S.sessionId = null;
-  S.view      = 'players';
+  S.roomId = roomId;
+  put({});
+  S.rosterId = S.teamSetId = S.sessionId = null;
+  S.teamDate = S.matchDate = today();
+  S.view = 'players';
 
   let d = null;
   try{ d = JSON.parse(localStorage.getItem(LS_ROOM + roomId) || 'null'); }catch(e){}
   if(d){
-    S.rosters   = (d.rosters  || []).map(normRoster);
-    S.sessions  = (d.sessions || []).map(normSession);
+    put(d);
     S.rosterId  = d.rosterId  || null;
+    S.teamSetId = d.teamSetId || null;
     S.sessionId = d.sessionId || null;
+    S.teamDate  = normDate(d.teamDate);
+    S.matchDate = normDate(d.matchDate);
     S.view      = ['players','teams','matches'].indexOf(d.view) >= 0 ? d.view : 'players';
   }
   fix();
   return !!d;
 }
 
-/* ---------------- danh sách nhóm gần đây ---------------- */
+/* Dọn tham chiếu hỏng, đảm bảo luôn có ít nhất một danh sách người chơi */
+function fix(){
+  if(!S.rosters.length) S.rosters = [normRoster({ name: 'Danh sách chính', players: [] })];
+  const rIds = S.rosters.map(r => r.id);
+  if(rIds.indexOf(S.rosterId) < 0) S.rosterId = rIds[0];
+
+  S.teamSets.forEach(t => { if(rIds.indexOf(t.rosterId) < 0) t.rosterId = rIds[0]; });
+  const tIds = S.teamSets.map(t => t.id);
+  S.sessions.forEach(s => { if(tIds.indexOf(s.teamSetId) < 0) s.teamSetId = ''; });
+
+  if(tIds.indexOf(S.teamSetId) < 0) S.teamSetId = null;
+  if(S.sessions.map(s => s.id).indexOf(S.sessionId) < 0) S.sessionId = null;
+}
+
+function applyRemote(d){
+  applying = true;
+  put(d);
+  fix();
+  applying = false;
+  saveLocal();
+}
+const isApplying = () => applying;
+
+/* ---------------- nhóm ---------------- */
 function rooms(){
   try{
     const r = JSON.parse(localStorage.getItem(LS_ROOMS) || 'null');
@@ -173,18 +235,53 @@ function forgetRoom(id){
   }catch(e){}
 }
 
-/* ---------------- dữ liệu từ bản chưa có nhóm ---------------- */
-/* Người dùng cũ có dữ liệu nằm ngoài mọi nhóm. Lần đầu tạo nhóm sẽ được hỏi có đưa vào không. */
+/* ---------------- chuyển đổi dữ liệu bản cũ ---------------- */
+/* Bản trước: đội nằm trong roster.teams, buổi trận có playerIds + cfg.mode.
+   Chuyển: roster.teams -> một teamSet ngày hôm nay; buổi trận theo đội -> trỏ vào teamSet đó.
+   Buổi trận của các chế độ chia theo cá nhân (mixed/split/free) không còn biểu diễn được nữa. */
+function convertLegacy(o){
+  if(!o || !Array.isArray(o.rosters) || !o.rosters.length) return null;
+  const d = today();
+  const rosters = o.rosters.map(normRoster);
+  const teamSets = [], tsByRoster = {};
+
+  o.rosters.forEach((r, i) => {
+    if(!r || !Array.isArray(r.teams) || !r.teams.length) return;
+    const ts = normTeamSet({
+      date: d, name: 'Đội của ' + rosters[i].name,
+      rosterId: rosters[i].id, teams: r.teams,
+    });
+    teamSets.push(ts);
+    tsByRoster[rosters[i].id] = ts.id;
+  });
+
+  let dropped = 0;
+  const sessions = [];
+  (o.sessions || []).forEach(s => {
+    const teamSetId = tsByRoster[s && s.rosterId];
+    const isTeam = s && s.cfg && s.cfg.mode === 'teams' && teamSetId;
+    if(!isTeam){ dropped++; return; }
+    sessions.push(normSession({
+      id: s.id, date: d, name: s.name, teamSetId: teamSetId, cfg: s.cfg,
+      rounds: (s.rounds || []).map(r => ({ matches: (r.matches || []).map(m =>
+        ({ ta: m.ta, tb: m.tb, s1: m.s1, s2: m.s2, win: m.win })) })),
+    }));
+  });
+
+  return { rosters, teamSets, sessions, dropped };
+}
+
+/* Dữ liệu còn sót từ bản chưa có nhóm — hỏi người dùng có đưa vào nhóm mới không */
 function legacy(){
   try{
-    const o = JSON.parse(localStorage.getItem(LS_V3) || 'null');
-    if(o && o.rosters && o.rosters.length)
-      return { rosters: o.rosters.map(normRoster), sessions: (o.sessions || []).map(normSession) };
+    const c = convertLegacy(JSON.parse(localStorage.getItem(LS_V3) || 'null'));
+    if(c) return c;
   }catch(e){}
   try{
     const o = JSON.parse(localStorage.getItem(LS_V2) || 'null');
     if(o && o.players && o.players.length)
-      return { rosters: [normRoster({ name: 'Danh sách chính', players: o.players })], sessions: [] };
+      return { rosters: [normRoster({ name: 'Danh sách chính', players: o.players })],
+               teamSets: [], sessions: [], dropped: 0 };
   }catch(e){}
   return null;
 }
@@ -192,31 +289,15 @@ function dropLegacy(){
   try{ localStorage.removeItem(LS_V3); localStorage.removeItem(LS_V2); }catch(e){}
 }
 
-/* Dọn tham chiếu hỏng và đảm bảo luôn có ít nhất 1 danh sách */
-function fix(){
-  if(!S.rosters.length) S.rosters = [normRoster({ name: 'Danh sách chính', players: [] })];
-  const rIds = S.rosters.map(r => r.id);
-  if(rIds.indexOf(S.rosterId) < 0) S.rosterId = rIds[0];
-
-  S.sessions.forEach(s => { if(rIds.indexOf(s.rosterId) < 0) s.rosterId = S.rosterId; });
-  const sIds = S.sessions.map(s => s.id);
-  if(sIds.indexOf(S.sessionId) < 0) S.sessionId = sIds.length ? sIds[sIds.length - 1] : null;
-}
-
-function applyRemote(d){
-  applying = true;
-  if(Array.isArray(d.rosters))  S.rosters  = d.rosters.map(normRoster);
-  if(Array.isArray(d.sessions)) S.sessions = d.sessions.map(normSession);
-  fix();
-  applying = false;
-  saveLocal();
-}
-const isApplying = () => applying;
-
 /* ---------------- truy cập tiện lợi ---------------- */
-const roster  = () => S.rosters.find(r => r.id === S.rosterId) || S.rosters[0] || null;
-const session = () => S.sessions.find(s => s.id === S.sessionId) || null;
-const rosterOf = s => S.rosters.find(r => r.id === (s && s.rosterId)) || null;
+const roster   = () => S.rosters.find(r => r.id === S.rosterId) || S.rosters[0] || null;
+const teamSet  = () => S.teamSets.find(t => t.id === S.teamSetId) || null;
+const session  = () => S.sessions.find(s => s.id === S.sessionId) || null;
+
+const teamSetsOn = date => S.teamSets.filter(t => t.date === date);
+const sessionsOn = date => S.sessions.filter(s => s.date === date);
+const teamSetOf  = s => S.teamSets.find(t => t.id === (s && s.teamSetId)) || null;
+const rosterOf   = ts => S.rosters.find(r => r.id === (ts && ts.rosterId)) || null;
 
 function addRoster(name){
   const r = normRoster({ name: name || `Danh sách ${S.rosters.length + 1}` });
@@ -224,70 +305,92 @@ function addRoster(name){
   S.rosterId = r.id;
   return r;
 }
-function addSession(name){
-  const d = new Date();
-  const base = name || `Buổi ${d.getDate()}/${d.getMonth() + 1}`;
+function removeRoster(id){
+  S.rosters = S.rosters.filter(r => r.id !== id);
+  const gone = S.teamSets.filter(t => t.rosterId === id).map(t => t.id);
+  S.teamSets = S.teamSets.filter(t => t.rosterId !== id);
+  S.sessions = S.sessions.filter(s => gone.indexOf(s.teamSetId) < 0);
+  fix();
+}
+
+function uniqueName(base, taken){
   let n = base, i = 2;
-  while(S.sessions.some(s => s.name === n)) n = `${base} (${i++})`;
-  const last = S.sessions[S.sessions.length - 1];
-  const s = normSession({
-    name: n,
+  while(taken.indexOf(n) >= 0) n = `${base} (${i++})`;
+  return n;
+}
+function addTeamSet(date, name){
+  const on = teamSetsOn(date);
+  const ts = normTeamSet({
+    date: date,
+    name: uniqueName(name || `Đội ${on.length + 1}`, on.map(x => x.name)),
     rosterId: S.rosterId,
-    cfg: last ? last.cfg : null,             // kế thừa cấu hình buổi trước
-    createdAt: Date.now(),
+  });
+  S.teamSets.push(ts);
+  S.teamSetId = ts.id;
+  return ts;
+}
+function removeTeamSet(id){
+  S.teamSets = S.teamSets.filter(t => t.id !== id);
+  S.sessions = S.sessions.filter(s => s.teamSetId !== id);
+  fix();
+}
+
+function addSession(date, name){
+  const on = sessionsOn(date);
+  const last = S.sessions[S.sessions.length - 1];
+  const sameDay = teamSetsOn(date);
+  const s = normSession({
+    date: date,
+    name: uniqueName(name || `Trận ${on.length + 1}`, on.map(x => x.name)),
+    teamSetId: (sameDay[0] && sameDay[0].id) || (S.teamSets[0] && S.teamSets[0].id) || '',
+    cfg: last ? last.cfg : null,
   });
   S.sessions.push(s);
   S.sessionId = s.id;
   return s;
-}
-function removeRoster(id){
-  S.rosters = S.rosters.filter(r => r.id !== id);
-  S.sessions = S.sessions.filter(s => s.rosterId !== id);   // buổi trận mất danh sách thì bỏ luôn
-  fix();
 }
 function removeSession(id){
   S.sessions = S.sessions.filter(s => s.id !== id);
   fix();
 }
 
-/* ---------------- đội cố định ---------------- */
-
-/* Đội đã dựng thành object người chơi. Bỏ đội có người không còn trong danh sách. */
-function teamsOf(roster){
-  if(!roster) return [];
+/* ---------------- đội ---------------- */
+/* Đội đã dựng thành object người chơi; bỏ đội có người không còn trong danh sách */
+function teamsOf(ts){
+  if(!ts) return [];
+  const r = rosterOf(ts);
+  if(!r) return [];
   const by = {};
-  roster.players.forEach(p => { by[p.id] = p; });
-  return roster.teams
+  r.players.forEach(p => { by[p.id] = p; });
+  return ts.teams
     .map(t => ({ id: t.id, name: t.name, p1: by[t.a], p2: by[t.b] }))
     .filter(t => t.p1 && t.p2);
 }
-
 /* Đội dùng được cho buổi trận: cả 2 người phải được tick "Chơi" */
-function liveTeams(roster){
-  return teamsOf(roster).filter(t => t.p1.active && t.p2.active);
-}
+const liveTeams = ts => teamsOf(ts).filter(t => t.p1.active && t.p2.active);
 
-/* Người chưa được xếp vào đội nào. activeOnly = chỉ tính người đang tick "Chơi". */
-function unteamed(roster, activeOnly){
-  if(!roster) return [];
+/* Người chưa được xếp vào đội nào trong danh sách đội này */
+function unteamed(ts, activeOnly){
+  const r = rosterOf(ts);
+  if(!r) return [];
   const inTeam = {};
-  roster.teams.forEach(t => { inTeam[t.a] = true; inTeam[t.b] = true; });
-  return roster.players.filter(p => !inTeam[p.id] && (!activeOnly || p.active));
+  ts.teams.forEach(t => { inTeam[t.a] = true; inTeam[t.b] = true; });
+  return r.players.filter(p => !inTeam[p.id] && (!activeOnly || p.active));
 }
-
 const teamLabel = t => t.name || (t.p1.name + ' & ' + t.p2.name);
 
-/* Buổi trận đã có kết quả nào chưa (dùng để cảnh báo trước khi tạo lại lịch) */
-function hasResults(s){
-  return !!(s && s.rounds.some(r => r.matches.some(m => m.win === 1 || m.win === 2)));
-}
+const hasResults = s =>
+  !!(s && s.rounds.some(r => r.matches.some(m => m.win === 1 || m.win === 2)));
 
 root.PBStore = {
   state: S, data, load, save, saveLocal, applyRemote, isApplying, fix,
   rooms, rememberRoom, forgetRoom, legacy, dropLegacy,
-  normPlayer, normRoster, normCfg, normSession,
-  roster, session, rosterOf, addRoster, addSession, removeRoster, removeSession, hasResults,
-  teamsOf, liveTeams, unteamed, teamLabel,
+  normPlayer, normRoster, normTeamSet, normCfg, normSession,
+  today, normDate, showDate,
+  roster, teamSet, session, teamSetsOn, sessionsOn, teamSetOf, rosterOf,
+  addRoster, removeRoster, addTeamSet, removeTeamSet, addSession, removeSession,
+  teamsOf, liveTeams, unteamed, teamLabel, hasResults,
+  note: () => migrateNote, setNote: m => { migrateNote = m; },
 };
 
 })(typeof window !== 'undefined' ? window : globalThis);

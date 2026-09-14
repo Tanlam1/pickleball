@@ -183,6 +183,14 @@ td .ck{width:22px;height:22px;accent-color:var(--accent);display:block;margin:0 
 .match .mhead{display:flex;justify-content:space-between;align-items:center;gap:8px;
   font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
 .match .mstate.done{color:var(--ok)}
+.tabs{display:flex;gap:6px;margin-bottom:12px}
+.tab{flex:1;padding:8px 10px;font-size:13.5px;min-height:38px;
+  background:var(--bg);color:var(--muted);font-weight:600}
+.tab.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.picker input[type=date]{flex:1;min-height:40px;font-weight:600}
+.picker .sq{width:auto;padding:0 12px;font-size:13px;font-weight:600}
+.cfgbody{padding-top:14px;margin-top:12px;border-top:1px solid var(--border)}
+
 .tmembers{display:block;font-size:12px;color:var(--muted);font-weight:500;margin-top:2px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tout{color:var(--warn-fg);font-weight:600}

@@ -31,7 +31,18 @@ Mỗi dòng gồm **Tên · Giới tính · Rating · Chơi** (tick chọn ai c�
 - Nhập hàng loạt bằng dán text: `Tên, Nam/Nữ, Rating` mỗi dòng
 - Xoá một danh sách sẽ xoá luôn các buổi trận dùng nó (có cảnh báo trước)
 
-### 2. Danh sách đội
+### 2. Danh sách đội — theo ngày
+
+1. **Ngày tạo đội** — chọn ngày
+2. **Danh sách đội** — mỗi ngày tạo được nhiều danh sách đội khác nhau
+3. **Tạo đội** — bốn kiểu, kiểu nào cũng ghép **mạnh với yếu** để các đội ngang trình độ nhau:
+
+| Kiểu | Ghép |
+|---|---|
+| **Đôi nam** | chỉ nam với nam |
+| **Đôi nữ** | chỉ nữ với nữ |
+| **Đôi nam nữ** | 1 nam + 1 nữ (nam mạnh ghép nữ yếu); bên nào dư thì ghép cùng giới |
+| **Ngẫu nhiên** | không phân biệt giới tính |
 
 Đội là **cặp 2 người cố định**, gắn với một danh sách người chơi và dùng lại cho mọi buổi trận.
 
@@ -51,72 +62,55 @@ Mỗi đội đặt được tên riêng (để trống thì hiện tên 2 ngư�
 Đội đã ghép thì **cố định**: nếu hôm nào có người vắng (bỏ tick), đội đó chỉ tạm không tham gia buổi
 trận chứ không bị xoá — tick lại là dùng được ngay. Chỉ khi bấm ghép lại thì toàn bộ đội mới bị thay.
 
-### 3. Tạo trận
+### 3. Tạo trận — theo ngày
 
-Tạo được **nhiều buổi trận**, mỗi buổi có tên riêng (mặc định `Buổi 14/9`, đổi được).
+1. **Ngày thi đấu** — chọn ngày
+2. **Danh sách trận** — tự load các danh sách của ngày đó; chưa có thì tạo mới, tạo được nhiều
+3. **Danh sách đội** — chọn dùng danh sách đội nào (ưu tiên gợi ý các danh sách cùng ngày)
+4. **Số sân · Số trận mỗi đội** rồi bấm **Tạo trận ngẫu nhiên**. Bên dưới ô nhập có ước lượng
+   sẵn sẽ ra khoảng bao nhiêu vòng, bao nhiêu trận. Nút **Tuỳ chọn khác** mở thêm:
+   trận tối đa, số đội tối đa, lệch rating tối đa, bỏ qua rating
+5. **Bảng xếp hạng** — hai tab: **Danh sách này** và **Cả ngày thi đấu** (gộp mọi danh sách trận trong ngày)
 
-**Tuỳ chọn chia:**
+**Ghi kết quả:** chạm vào bất kỳ trận nào → bảng nhập điểm với nút +/− cỡ lớn.
+Điểm cao hơn tự được đánh dấu thắng, hoặc chạm thẳng vào một đội để chọn.
 
-| | |
-|---|---|
-| Chế độ | Đôi nam nữ · Tách nam nữ · Ngẫu nhiên tự do · **Đội cố định** |
-| Số sân | bao nhiêu trận chạy song song mỗi vòng |
-| Ván tối thiểu / tối đa mỗi người | |
-| Số người tối đa | 0 = lấy hết |
-| **Lệch rating tối đa** | chênh lệch tổng rating giữa 2 đội mỗi trận, 0 = không giới hạn |
-| **Bỏ qua rating** | chia không quan tâm trình độ, và ẩn rating khỏi thẻ trận |
+Mỗi thẻ trận hiện sẵn mức lệch rating; trận nào vượt ngưỡng được tô màu cảnh báo.
 
-Mỗi thẻ trận hiện sẵn mức lệch; trận nào vượt ngưỡng sẽ được tô màu cảnh báo.
+## Thuật toán
 
-**Ghi kết quả:** chạm vào bất kỳ trận nào → mở bảng nhập điểm với nút +/− cỡ lớn.
-Điểm cao hơn tự được đánh dấu thắng, hoặc chạm thẳng vào một đội để chọn đội thắng.
+### Ghép đội
 
-**Bảng thống kê** nằm ngay đầu màn hình, cập nhật tức thì: số trận đã đấu, thắng, thua, hiệu số điểm,
-xếp hạng theo số trận thắng.
+Cả bốn kiểu đều xếp theo rating rồi **ghép mạnh nhất với yếu nhất**, nên các đội có tổng rating
+gần bằng nhau. Riêng *Đôi nam nữ* ghép nam mạnh với nữ yếu (và ngược lại) để đạt cùng mục tiêu đó.
+Chỉ lấy người đang tick **Chơi**.
 
-Chọn **Đội cố định** thì đơn vị xếp lịch là đội chứ không phải cá nhân: các ô nhập đổi sang
-"trận mỗi đội" / "số đội tối đa", bảng xếp hạng tính theo đội, và mỗi trận hiện tên đội.
-Nếu danh sách chưa có đội, ngay tại đây sẽ có nút ghép nhanh — không cần quay lại màn hình kia.
+### Xếp trận
 
-## Thuật toán chia
+Đơn vị xếp lịch là **đội**. Thứ tự ưu tiên, trọng số chênh nhau đủ lớn để mục tiêu trên
+luôn thắng mục tiêu dưới:
 
-### Chế độ đội cố định
+1. **Không gặp lại đội đã đấu**
+2. **Không đánh 2 trận liên tiếp**
+3. **Hai đội ngang trình độ**
 
-Ưu tiên theo đúng thứ tự này:
+Mỗi vòng, app chọn các đội đánh ít trận nhất rồi xáo ngẫu nhiên 24 lần; **mỗi lần đều được tinh chỉnh**
+bằng cách liên tục thử đổi chỗ hai đội (hoặc thay bằng đội đang nghỉ có cùng số trận) và giữ lại
+nếu điểm phạt giảm, cho tới khi không cải thiện được nữa.
 
-1. **Không gặp lại đội đã đấu** — ưu tiên tuyệt đối, phạt lớn hơn mọi tiêu chí khác cộng lại
-2. Mỗi đội đủ số trận tối thiểu, đội đánh ít nhất được ra sân trước
-3. Ghép hai đội có tổng rating gần nhau
+### Khi nào không tránh được
 
-Đủ đội thì không cặp nào gặp lại nhau. Nhóm ít đội thì buộc phải lặp — khi đó phần lặp được
-**rải đều** chứ không dồn vào một cặp, và app báo rõ cần bao nhiêu đội để hết lặp.
+Đủ đội thì không cặp nào gặp lại nhau và không ai phải đánh liên tiếp. Đo được:
 
-### Các chế độ còn lại
-
-Mỗi vòng ưu tiên người **đánh ít ván nhất**, rồi **nghỉ lâu nhất**.
-
-Với nhóm đã chọn, app xáo ngẫu nhiên 24 lần; **mỗi lần đều được tinh chỉnh** bằng cách liên tục thử đổi chỗ
-hai người và giữ lại nếu điểm phạt giảm, cho tới khi không cải thiện được nữa. Phép đổi chỗ gồm cả việc thay
-người trên sân bằng người đang nghỉ **có cùng số ván và cùng số vòng nghỉ** — mở rộng không gian tìm kiếm mà
-không hy sinh tính công bằng.
-
-Điểm phạt gồm: trùng bạn cùng đội (nặng, theo bình phương số lần), trùng đối thủ (nhẹ),
-lệch rating theo **bình phương**, cộng một bậc phạt lớn nếu vượt ngưỡng "lệch rating tối đa".
-
-### Đánh đổi cần biết
-
-Siết ngưỡng lệch càng chặt thì càng nhiều cặp phải đánh chung lại lần nữa. Đo trên nhóm 16 người, 2 sân:
-
-| Ngưỡng | Đôi nam nữ: lệch max / cặp trùng | Tách nam nữ: lệch max / cặp trùng |
+| Tình huống | Cặp đấu lặp | Đánh liên tiếp |
 |---|---|---|
-| tắt (0) | 3.00 / 0 trên 32 cặp | 2.75 / 8 trên 24 cặp |
-| 1.5 | 1.50 / 0.4 | 1.50 / 11.5 |
-| **1.0** *(mặc định)* | **1.00 / 1.3** | 1.50 / 14.5 |
-| 0.5 | 1.25 / 4.1 | 1.25 / 14.7 |
+| 10 đội, 2 sân, 4 trận/đội | 0 | 0 |
+| 8 đội, 2 sân, 3 trận/đội | 0 | 0 |
+| 7 đội, 2 sân, 4 trận/đội | 0 | có (7 đội thì gần như ai cũng ra sân mỗi vòng) |
+| 3 đội, 1 sân, 4 trận/đội | buộc phải lặp | buộc phải liên tiếp |
 
-Mặc định 1.0 rất hợp với **đôi nam nữ**. Với **tách nam nữ** thì không gian lựa chọn hẹp hơn nhiều
-(chỉ ghép được trong cùng giới), nên 1.5–2.0 thường hợp lý hơn. App sẽ tự cảnh báo khi ngưỡng đang
-là nguyên nhân chính làm cặp trùng tăng.
+Ít đội quá thì hai mục tiêu đầu mâu thuẫn nhau — app vẫn xếp đủ trận và **báo rõ** cần bao nhiêu đội
+để hết lặp. Muốn ít đánh liên tiếp thì cần số đội nhiều hơn 4 lần số sân.
 
 ## Cấu trúc
 

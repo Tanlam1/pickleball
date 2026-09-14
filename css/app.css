@@ -1,4 +1,7 @@
 :root{
+  /* Báo cho trình duyệt biết đang ở tông nào, để các control gốc (lịch của input[type=date],
+     danh sách xổ của select, thanh cuộn) tự vẽ theo đúng tông thay vì luôn nền trắng. */
+  color-scheme: light;
   --bg:#f4f6f8; --panel:#ffffff; --fg:#161b22; --muted:#66717f;
   --border:#e3e7ec; --accent:#0f766e; --accent-fg:#ffffff;
   --male:#2563eb; --female:#db2777;
@@ -9,6 +12,7 @@
 }
 @media (prefers-color-scheme:dark){
   :root{
+    color-scheme: dark;
     --bg:#0e1216; --panel:#171d23; --fg:#e6ebf1; --muted:#94a1b0;
     --border:#262f39; --accent:#2dd4bf; --accent-fg:#06231f;
     --male:#60a5fa; --female:#f472b6;
@@ -25,10 +29,16 @@ body{margin:0;background:var(--bg);color:var(--fg);
 .hide{display:none!important}
 
 input,select,textarea,button{font:inherit;color:inherit}
-input[type=text],input[type=number],select,textarea{
+input[type=text],input[type=number],input[type=date],select,textarea{
   width:100%;padding:9px 10px;background:var(--bg);border:1px solid var(--border);
   border-radius:9px;outline:none;min-width:0}
 input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+
+/* Safari trên iOS không tự căn chiều cao/lề cho input[type=date] như các ô khác */
+input[type=date]{min-height:40px;line-height:1.2}
+input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0}
+input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.75}
+input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
 textarea{resize:vertical;min-height:96px;font-family:ui-monospace,Consolas,monospace;font-size:13px}
 label{display:block;font-size:11px;font-weight:700;color:var(--muted);
   text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}

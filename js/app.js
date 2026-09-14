@@ -221,9 +221,10 @@ function renderTeams(){
 
   const teams = PBStore.teamsOf(r);
   const live  = PBStore.liveTeams(r);
-  const left  = PBStore.unteamed(r);
+  const left  = PBStore.unteamed(r, true);              // chỉ người đang tick "Chơi"
+  const off   = PBStore.unteamed(r).length - left.length;
 
-  $('tcount').textContent = `${teams.length} đội · ${live.length} đội đủ người để xếp trận · ${left.length} người chưa có đội`;
+  $('tcount').textContent = `${teams.length} đội · ${live.length} đội đủ người để xếp trận · ${left.length} người đang tick Chơi chưa có đội`;
 
   $('tlist').innerHTML = teams.map((t, i) => `
     <tr>
@@ -251,9 +252,9 @@ function renderTeams(){
   $('tPickB').innerHTML = opts;
   if(left.length > 1) $('tPickB').value = left[1].id;
   $('btnTeamAdd').disabled = left.length < 2;
-  $('tleft').textContent = left.length
-    ? `Chưa có đội: ${left.map(p => p.name).join(', ')}`
-    : 'Mọi người đều đã có đội.';
+  $('tleft').textContent =
+    (left.length ? `Chưa có đội: ${left.map(p => p.name).join(', ')}. ` : 'Mọi người đang chơi đều đã có đội. ') +
+    (off ? `${off} người chưa tick "Chơi" nên không được ghép đội — tick vào nếu muốn xếp đội cho họ.` : '');
 }
 
 $('tRosterSel').onchange = () => { S.rosterId = $('tRosterSel').value; PBStore.saveLocal(); render(); };
@@ -273,15 +274,28 @@ $('tlist').addEventListener('click', e => {
   PBStore.save();
 });
 
+/* Chỉ ghép đội cho người đang tick "Chơi" — ai chưa tick thì bỏ qua hoàn toàn. */
 function buildTeamsFor(r, style){
-  if(!r || r.players.length < 2){ toast('Cần ít nhất 2 người trong danh sách'); return false; }
-  if(r.teams.length && !confirm(`Ghép lại sẽ thay toàn bộ ${r.teams.length} đội hiện có. Tiếp tục?`)) return false;
+  if(!r) return false;
+  const pool = r.players.filter(p => p.active);
+  const skipped = r.players.length - pool.length;
+  if(pool.length < 2){
+    toast('Cần ít nhất 2 người được tick "Chơi"');
+    return false;
+  }
+  if(r.teams.length && !confirm(
+      `Ghép ${pool.length} người đang tick "Chơi" thành đội.` +
+      (skipped ? `\n${skipped} người chưa tick sẽ không được xếp vào đội nào.` : '') +
+      `\n\nToàn bộ ${r.teams.length} đội hiện có sẽ bị thay. Tiếp tục?`)) return false;
 
-  const out = PB.makeTeams(r.players, style);
+  const out = PB.makeTeams(pool, style);
   r.teams = out.teams.map(t => ({ id: PB.newId('t'), name: '', a: t.p1.id, b: t.p2.id }));
   PBStore.save();
-  toast(out.odd ? `Đã ghép ${r.teams.length} đội — ${out.odd.name} lẻ chưa có đội`
-                : `Đã ghép ${r.teams.length} đội`);
+
+  const notes = [];
+  if(out.odd) notes.push(`${out.odd.name} lẻ chưa có đội`);
+  if(skipped) notes.push(`bỏ qua ${skipped} người chưa tick Chơi`);
+  toast(`Đã ghép ${r.teams.length} đội` + (notes.length ? ` — ${notes.join(', ')}` : ''));
   return true;
 }
 function buildTeams(style){ if(buildTeamsFor(PBStore.roster(), style)) render(); }
@@ -339,7 +353,7 @@ function applyMode(s){
   if(!T){ box.classList.add('hide'); return; }
 
   const r = PBStore.rosterOf(s);
-  const all = PBStore.teamsOf(r), live = PBStore.liveTeams(r), left = PBStore.unteamed(r);
+  const all = PBStore.teamsOf(r), live = PBStore.liveTeams(r), left = PBStore.unteamed(r, true);
   box.classList.remove('hide');
 
   if(!all.length){
@@ -426,7 +440,7 @@ function renderRounds(){
     const excluded = PBStore.teamsOf(r).filter(t => !t.p1.active || !t.p2.active);
     if(excluded.length)
       w.push(`${excluded.length} đội không tham gia vì có người chưa tick "Chơi": <b>${excluded.map(t=>esc(PBStore.teamLabel(t))).join(', ')}</b>.`);
-    const left = PBStore.unteamed(r).filter(p => p.active);
+    const left = PBStore.unteamed(r, true);
     if(left.length)
       w.push(`${left.length} người chưa có đội nên ngồi ngoài: <b>${left.map(p=>esc(p.name)).join(', ')}</b>.`);
 

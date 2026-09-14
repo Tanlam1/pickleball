@@ -222,12 +222,12 @@ function liveTeams(roster){
   return teamsOf(roster).filter(t => t.p1.active && t.p2.active);
 }
 
-/* Người chưa được xếp vào đội nào */
-function unteamed(roster){
+/* Người chưa được xếp vào đội nào. activeOnly = chỉ tính người đang tick "Chơi". */
+function unteamed(roster, activeOnly){
   if(!roster) return [];
   const inTeam = {};
   roster.teams.forEach(t => { inTeam[t.a] = true; inTeam[t.b] = true; });
-  return roster.players.filter(p => !inTeam[p.id]);
+  return roster.players.filter(p => !inTeam[p.id] && (!activeOnly || p.active));
 }
 
 const teamLabel = t => t.name || (t.p1.name + ' & ' + t.p2.name);

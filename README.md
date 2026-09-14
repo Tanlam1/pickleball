@@ -28,8 +28,13 @@ Ghép tự động bằng một nút, ba kiểu:
 | **Đôi nam nữ** | mỗi đội 1 nam + 1 nữ; phần dư ghép cùng giới |
 | **Ngẫu nhiên** | bốc thăm |
 
-Ghép thủ công từng cặp cũng được, và mỗi đội đặt được tên riêng (để trống thì hiện tên 2 người).
-Số người lẻ sẽ được báo rõ. Đội có người chưa tick **Chơi** sẽ tự động không tham gia buổi trận.
+**Chỉ người đang tick "Chơi" mới được ghép đội** — ai chưa tick thì bỏ qua hoàn toàn, và app báo rõ
+đã bỏ qua bao nhiêu người. Ghép thủ công cũng chỉ liệt kê người đang tick.
+
+Mỗi đội đặt được tên riêng (để trống thì hiện tên 2 người). Số người lẻ sẽ được báo rõ.
+
+Đội đã ghép thì **cố định**: nếu hôm nào có người vắng (bỏ tick), đội đó chỉ tạm không tham gia buổi
+trận chứ không bị xoá — tick lại là dùng được ngay. Chỉ khi bấm ghép lại thì toàn bộ đội mới bị thay.
 
 ### 3. Tạo trận
 

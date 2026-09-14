@@ -1,15 +1,15 @@
-/* app.js — giao diện: quản lý người chơi, gọi PB (scheduler.js), nối PBSync (sync.js) */
+/* app.js — giao diện: drawer, 2 màn hình (danh sách người chơi / tạo trận),
+   sheet nhập điểm, và nối với PBStore + PBSync. */
 (function(){
 'use strict';
 
 const $ = id => document.getElementById(id);
-const LS = 'pb_scheduler_v2', LS_OLD = 'pb_scheduler_v1';
+const S = PBStore.state;
 
-let players = [];
-let schedule = null;
-let currentRoom = null;
-let applyingRemote = false;      // chặn vòng lặp: nhận từ xa -> render -> lại đẩy lên
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sv  = v => (v === null || v === undefined || v === '') ? '–' : v;
 
+const MODE = { mixed:'Đôi nam nữ', split:'Tách nam nữ', free:'Ngẫu nhiên tự do' };
 const SAMPLE = [
   ['Minh','M',4.25],['Tuấn','M',3.75],['Hùng','M',3.5],['Nam','M',4.0],
   ['Dũng','M',3.25],['Khoa','M',3.5],['Phong','M',4.5],
@@ -17,7 +17,8 @@ const SAMPLE = [
   ['Linh','F',4.0],['Trang','F',3.0],['Ngọc','F',3.5],
 ];
 
-const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let H = null;              // buổi trận hiện tại đã dựng thành object
+let currentRoom = null;
 
 let toastTimer = null;
 function toast(msg){
@@ -28,268 +29,487 @@ function toast(msg){
   toastTimer = setTimeout(() => t.classList.remove('on'), 2400);
 }
 
-/* ============================ STATE ============================ */
-function readCfg(){
-  return {
-    mode:     $('cMode').value,
-    courts:   Math.max(1, +$('cCourts').value || 1),
-    minGames: Math.max(1, +$('cMin').value || 1),
-    maxGames: Math.max(0, +$('cMax').value || 0),
-    cap:      Math.max(0, +$('cCap').value || 0),
-    balance:  $('cBalance').checked,
+const dot = p => `<span class="dot ${p.gender === 'M' ? 'm' : 'f'}"></span>`;
+const teamHtml = t => t.map(p => dot(p) + esc(p.name)).join(' &amp; ');
+const teamSum  = t => (t[0].rating + t[1].rating).toFixed(2);
+
+/* ============================ KHUNG ============================ */
+function setDrawer(open){
+  $('drawer').classList.toggle('open', open);
+  $('scrim').classList.toggle('on', open);
+}
+$('btnMenu').onclick = () => setDrawer(true);
+$('scrim').onclick   = () => setDrawer(false);
+
+Array.prototype.forEach.call(document.querySelectorAll('.dnav'), b => {
+  b.onclick = () => {
+    S.view = b.dataset.view;
+    setDrawer(false);
+    PBStore.saveLocal();
+    render();
   };
-}
-function writeCfg(c){
-  if(!c) return;
-  if(c.mode)              $('cMode').value  = c.mode;
-  if(c.courts   != null)  $('cCourts').value = c.courts;
-  if(c.minGames != null)  $('cMin').value    = c.minGames;
-  if(c.maxGames != null)  $('cMax').value    = c.maxGames;
-  if(c.cap      != null)  $('cCap').value    = c.cap;
-  if(c.balance  != null)  $('cBalance').checked = !!c.balance;
+});
+
+document.addEventListener('keydown', e => {
+  if(e.key !== 'Escape') return;
+  if($('sheet').classList.contains('open')) closeSheet();
+  else setDrawer(false);
+});
+
+function render(){
+  const isP = S.view === 'players';
+  $('viewPlayers').classList.toggle('hide', !isP);
+  $('viewMatches').classList.toggle('hide', isP);
+  $('pageTitle').textContent = isP ? 'Danh sách người chơi' : 'Tạo trận';
+  Array.prototype.forEach.call(document.querySelectorAll('.dnav'),
+    b => b.classList.toggle('on', b.dataset.view === S.view));
+  $('navRosters').textContent  = S.rosters.length;
+  $('navSessions').textContent = S.sessions.length;
+  if(isP) renderPlayers(); else renderMatches();
 }
 
-/* Làm sạch trước khi lưu / gửi đi: bỏ field tạm (_r) và chặn dữ liệu lạ từ phòng chung */
-function normPlayer(p){
-  p = p || {};
-  const r = parseFloat(p.rating);
-  return {
-    id:     String(p.id || PB.newId()),
-    name:   String(p.name || '').slice(0, 40),
-    gender: p.gender === 'F' ? 'F' : 'M',
-    rating: isNaN(r) ? 3.5 : Math.min(8, Math.max(1, r)),
-    active: p.active !== false,
-  };
-}
-function stateObj(){
-  return { players: players.map(normPlayer), cfg: readCfg(), schedule: PB.serialize(schedule) };
-}
-function saveLocal(){
-  try{ localStorage.setItem(LS, JSON.stringify(stateObj())); }catch(e){}
-}
-function save(){
-  saveLocal();
-  if(!applyingRemote) PBSync.push(stateObj());
-}
-
-function load(){
-  let d = null;
-  try{ d = JSON.parse(localStorage.getItem(LS) || 'null'); }catch(e){}
-  if(!d){
-    /* chuyển dữ liệu từ phiên bản trước (id số, tên field cfg khác) */
-    try{
-      const o = JSON.parse(localStorage.getItem(LS_OLD) || 'null');
-      if(o) d = { players: o.players, cfg: o.cfg && {
-        mode: o.cfg.mode, courts: +o.cfg.courts, minGames: +o.cfg.min,
-        maxGames: +o.cfg.max, cap: +o.cfg.cap, balance: o.cfg.balance } };
-    }catch(e){}
-  }
-  if(!d) return;
-  players = (d.players || []).map(normPlayer);
-  writeCfg(d.cfg);
-  if(d.schedule) schedule = PB.deserialize(d.schedule, players);
-}
-
-/* ============================ NGƯỜI CHƠI ============================ */
-function addPlayer(name, gender, rating){
-  name = String(name || '').trim();
-  if(!name) return false;
-  players.push(normPlayer({ id: PB.newId(), name, gender, rating }));
-  return true;
+/* ============================ 1. DANH SÁCH NGƯỜI CHƠI ============================ */
+function updateCount(){
+  const r = PBStore.roster();
+  const a = r.players.filter(p => p.active);
+  $('pcount').textContent = r.players.length
+    ? `${a.length}/${r.players.length} người được tick chơi · ${a.filter(p=>p.gender==='M').length} nam, ${a.filter(p=>p.gender==='F').length} nữ`
+    : 'Danh sách trống — thêm người chơi ở dưới.';
 }
 
 function renderPlayers(){
-  $('plist').innerHTML = players.map((p, i) => `
+  const r = PBStore.roster();
+  $('rosterSel').innerHTML = S.rosters.map(x =>
+    `<option value="${x.id}"${x.id === r.id ? ' selected' : ''}>${esc(x.name)} (${x.players.length})</option>`).join('');
+
+  $('plist').innerHTML = r.players.map((p, i) => `
     <tr>
-      <td><input type="checkbox" data-k="active" data-i="${i}" ${p.active?'checked':''} style="width:auto"></td>
       <td><input type="text" data-k="name" data-i="${i}" value="${esc(p.name)}"></td>
-      <td><select data-k="gender" data-i="${i}">
-        <option value="M"${p.gender==='M'?' selected':''}>Nam</option>
-        <option value="F"${p.gender==='F'?' selected':''}>Nữ</option></select></td>
-      <td><input type="number" data-k="rating" data-i="${i}" value="${p.rating}" step="0.25" min="1" max="8"></td>
-      <td><button class="ghost" data-del="${i}">Xoá</button></td>
+      <td><button class="gtoggle ${p.gender === 'M' ? 'm' : 'f'}" data-g="${i}">${p.gender === 'M' ? 'Nam' : 'Nữ'}</button></td>
+      <td><input type="number" data-k="rating" data-i="${i}" value="${p.rating}" step="0.25" min="1" max="8" inputmode="decimal"></td>
+      <td><input type="checkbox" class="ck" data-k="active" data-i="${i}" ${p.active ? 'checked' : ''}></td>
+      <td><button class="icon danger" data-del="${i}" aria-label="Xoá">✕</button></td>
     </tr>`).join('');
 
-  $('pempty').style.display = players.length ? 'none' : 'block';
-  const a = players.filter(p => p.active);
-  $('pcount').textContent = players.length
-    ? `— ${a.length}/${players.length} tham gia · ${a.filter(p=>p.gender==='M').length} nam, ${a.filter(p=>p.gender==='F').length} nữ`
-    : '';
-  save();
+  $('pempty').classList.toggle('hide', r.players.length > 0);
+  updateCount();
 }
 
+/* Sửa tại chỗ, không render lại cả bảng (giữ con trỏ khi đang gõ) */
 $('plist').addEventListener('input', e => {
   const t = e.target, i = t.dataset.i, k = t.dataset.k;
   if(i === undefined || !k) return;
-  if(k === 'active')      players[i].active = t.checked;
-  else if(k === 'rating') players[i].rating = parseFloat(t.value) || 0;
-  else                    players[i][k] = t.value;
-  if(k === 'active') renderPlayers(); else save();
-});
-$('plist').addEventListener('change', e => {
-  if(e.target.dataset.k === 'gender'){
-    players[e.target.dataset.i].gender = e.target.value;
-    renderPlayers();
-  }
-});
-$('plist').addEventListener('click', e => {
-  const d = e.target.dataset.del;
-  if(d !== undefined){ players.splice(+d, 1); renderPlayers(); }
+  const p = PBStore.roster().players[i];
+  if(!p) return;
+  if(k === 'active'){ p.active = t.checked; updateCount(); }
+  else if(k === 'rating'){ p.rating = parseFloat(t.value) || 0; }
+  else { p.name = t.value; }
+  PBStore.save();
 });
 
-$('btnAdd').onclick = () => {
-  if(addPlayer($('fName').value, $('fGender').value, $('fRating').value)){
-    $('fName').value = ''; $('fName').focus();
-    renderPlayers();
+$('plist').addEventListener('click', e => {
+  const g = e.target.closest('[data-g]');
+  if(g){
+    const p = PBStore.roster().players[+g.dataset.g];
+    p.gender = p.gender === 'M' ? 'F' : 'M';
+    g.className = 'gtoggle ' + (p.gender === 'M' ? 'm' : 'f');
+    g.textContent = p.gender === 'M' ? 'Nam' : 'Nữ';
+    updateCount();
+    PBStore.save();
+    return;
   }
+  const d = e.target.closest('[data-del]');
+  if(d){
+    PBStore.roster().players.splice(+d.dataset.del, 1);
+    renderPlayers();
+    PBStore.save();
+  }
+});
+
+$('rosterSel').onchange = () => { S.rosterId = $('rosterSel').value; PBStore.saveLocal(); renderPlayers(); };
+
+$('btnRosterNew').onclick = () => {
+  const n = prompt('Tên danh sách mới:', `Danh sách ${S.rosters.length + 1}`);
+  if(n === null) return;
+  PBStore.addRoster(n);
+  render();
+  PBStore.save();
+};
+$('btnRosterRename').onclick = () => {
+  const r = PBStore.roster();
+  const n = prompt('Đổi tên danh sách:', r.name);
+  if(n === null || !n.trim()) return;
+  r.name = n.trim().slice(0, 60);
+  render();
+  PBStore.save();
+};
+$('btnRosterDel').onclick = () => {
+  const r = PBStore.roster();
+  const used = S.sessions.filter(s => s.rosterId === r.id).length;
+  if(!confirm(used
+    ? `Xoá danh sách "${r.name}"?\n\n${used} buổi trận đang dùng danh sách này sẽ bị xoá theo.`
+    : `Xoá danh sách "${r.name}"?`)) return;
+  PBStore.removeRoster(r.id);
+  render();
+  PBStore.save();
+};
+
+function addPlayer(name, gender, rating){
+  name = String(name || '').trim();
+  if(!name) return false;
+  PBStore.roster().players.push(PBStore.normPlayer({ id: PB.newId('p'), name, gender, rating }));
+  return true;
+}
+$('btnAdd').onclick = () => {
+  if(!addPlayer($('fName').value, $('fGender').value, $('fRating').value)) return;
+  $('fName').value = '';
+  $('fName').focus();
+  renderPlayers();
+  PBStore.save();
 };
 $('fName').addEventListener('keydown', e => { if(e.key === 'Enter') $('btnAdd').click(); });
-$('btnAll').onclick  = () => { players.forEach(p => p.active = true);  renderPlayers(); };
-$('btnNone').onclick = () => { players.forEach(p => p.active = false); renderPlayers(); };
+
+$('btnAll').onclick  = () => { PBStore.roster().players.forEach(p => p.active = true);  renderPlayers(); PBStore.save(); };
+$('btnNone').onclick = () => { PBStore.roster().players.forEach(p => p.active = false); renderPlayers(); PBStore.save(); };
 $('btnSample').onclick = () => {
-  if(players.length && !confirm('Thay danh sách hiện tại bằng 14 người mẫu?')) return;
-  players = [];
+  const r = PBStore.roster();
+  if(r.players.length && !confirm(`Thay ${r.players.length} người trong "${r.name}" bằng 14 người mẫu?`)) return;
+  r.players = [];
   SAMPLE.forEach(s => addPlayer(s[0], s[1], s[2]));
   renderPlayers();
+  PBStore.save();
 };
-$('btnClear').onclick = () => {
-  if(!confirm('Xoá toàn bộ người chơi?')) return;
-  players = []; schedule = null;
-  $('resultPanel').style.display = 'none';
-  renderPlayers();
-};
-$('btnBulk').onclick       = () => { $('bulkBox').style.display = 'block'; $('bulkText').focus(); };
-$('btnBulkCancel').onclick = () => { $('bulkBox').style.display = 'none'; };
+$('btnBulk').onclick       = () => { $('bulkBox').classList.remove('hide'); $('bulkText').focus(); };
+$('btnBulkCancel').onclick = () => { $('bulkBox').classList.add('hide'); };
 $('btnBulkGo').onclick = () => {
   let n = 0;
   $('bulkText').value.split('\n').forEach(line => {
-    const c = line.split(/[,\t;]/).map(s => s.trim());
+    const c = line.split(/[,\t;]/).map(x => x.trim());
     if(!c[0]) return;
-    const g = /^(n[ữu]|f|female|w)$/i.test(c[1] || '') ? 'F' : 'M';
-    if(addPlayer(c[0], g, c[2])) n++;
+    if(addPlayer(c[0], /^(n[ữu]|f|female|w)$/i.test(c[1] || '') ? 'F' : 'M', c[2])) n++;
   });
   $('bulkText').value = '';
-  $('bulkBox').style.display = 'none';
+  $('bulkBox').classList.add('hide');
   renderPlayers();
+  PBStore.save();
   toast(n ? `Đã thêm ${n} người` : 'Không đọc được dòng nào');
 };
 
-/* ============================ HIỂN THỊ LỊCH ============================ */
-const pName = p => `<span class="p"><span class="dot ${p.gender==='M'?'m':'f'}"></span><b>${esc(p.name)}</b> <span style="color:var(--muted);font-size:12px">${p.rating.toFixed(2)}</span></span>`;
+/* ============================ 2. TẠO TRẬN ============================ */
+function renderMatches(){
+  const s = PBStore.session();
+  $('sessionSel').innerHTML = S.sessions.map(x =>
+    `<option value="${x.id}"${s && x.id === s.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')
+    || '<option>— chưa có buổi trận —</option>';
+  $('sessionSel').disabled     = !S.sessions.length;
+  $('btnSessionRename').disabled = !s;
+  $('btnSessionDel').disabled    = !s;
+  $('noSession').classList.toggle('hide', !!s);
+  $('sessionBody').classList.toggle('hide', !s);
+  if(!s) return;
 
-function renderSchedule(res){
-  $('resultPanel').style.display = 'block';
-  if(!res || res.error){
-    $('warnings').innerHTML = `<div class="warn">${esc(res ? res.error : 'Chưa có lịch.')}</div>`;
-    $('rounds').innerHTML = ''; $('statsBody').innerHTML = ''; $('summary').textContent = '';
+  $('cRoster').innerHTML = S.rosters.map(r =>
+    `<option value="${r.id}"${r.id === s.rosterId ? ' selected' : ''}>${esc(r.name)} (${r.players.filter(p=>p.active).length} chơi)</option>`).join('');
+  $('cMode').value          = s.cfg.mode;
+  $('cCourts').value        = s.cfg.courts;
+  $('cMin').value           = s.cfg.minGames;
+  $('cMax').value           = s.cfg.maxGames;
+  $('cCap').value           = s.cfg.cap;
+  $('cIgnoreRating').checked = s.cfg.ignoreRating;
+  $('cfgSummary').textContent = `${MODE[s.cfg.mode]} · ${s.cfg.courts} sân · tối thiểu ${s.cfg.minGames} ván`;
+
+  renderRounds();
+}
+
+function renderRounds(){
+  const s = PBStore.session();
+  const r = PBStore.rosterOf(s);
+  H = r ? PB.hydrate(s, r.players) : null;
+
+  const show = (warn) => {
+    $('standPanel').classList.add('hide');
+    $('rounds').innerHTML = '';
+    $('warnings').innerHTML = `<div class="warn">${warn}</div>`;
+  };
+  if(!s.rounds.length){
+    show('Chưa có lịch. Mở <b>Cấu hình chia trận</b> ở trên, chỉnh tuỳ chọn rồi bấm <b>Tạo lịch</b>.');
+    $('cfgPanel').open = true;
     return;
   }
-  const { ctx, rounds, cfg, list, dropped } = res;
+  if(!H){
+    show('Danh sách người chơi đã thay đổi nên lịch cũ không còn khớp. Bấm <b>Tạo lịch</b> để xếp lại.');
+    return;
+  }
 
-  $('summary').textContent = `— ${rounds.length} vòng · ${rounds.reduce((s,r)=>s+r.matches.length,0)} ván · ${list.length} người · ${cfg.courts} sân`;
+  /* --- bảng thống kê --- */
+  const st = PB.stats(H);
+  $('standPanel').classList.remove('hide');
+  $('standBody').innerHTML = st.map((x, i) => `
+    <tr>
+      <td class="rk">${i + 1}</td>
+      <td>${dot(x.p)}${esc(x.p.name)}</td>
+      <td class="num">${x.done}/${x.sched}</td>
+      <td class="num">${x.win}</td>
+      <td class="num">${x.loss}</td>
+      <td class="num">${x.diff > 0 ? '+' : ''}${x.diff}</td>
+    </tr>`).join('');
 
+  const all  = H.rounds.reduce((n, x) => n + x.matches.length, 0);
+  const done = H.rounds.reduce((n, x) => n + x.matches.filter(m => m.win).length, 0);
+  $('standMeta').textContent = `${done}/${all} trận đã có kết quả`;
+
+  /* --- cảnh báo --- */
   const w = [];
+  const dropped = r.players.filter(p => p.active && s.playerIds.indexOf(p.id) < 0);
   if(dropped.length)
-    w.push(`Giới hạn còn ${list.length} người — không xếp lịch cho: <b>${dropped.map(p=>esc(p.name)).join(', ')}</b>.`);
-  const short = list.filter(p => ctx.games[p.id] < cfg.minGames);
+    w.push(`Giới hạn còn ${s.playerIds.length} người — không xếp lịch cho: <b>${dropped.map(p=>esc(p.name)).join(', ')}</b>.`);
+  const short = H.list.filter(p => H.ctx.games[p.id] < s.cfg.minGames);
   if(short.length)
-    w.push(`Không đủ ${cfg.minGames} ván cho: <b>${short.map(p=>esc(p.name)+' ('+ctx.games[p.id]+')').join(', ')}</b>. Thử tăng số sân, giảm ván tối thiểu, hoặc bỏ giới hạn ván tối đa.`);
-  const gs = list.map(p => ctx.games[p.id]);
+    w.push(`Không đủ ${s.cfg.minGames} ván cho: <b>${short.map(p=>esc(p.name)+' ('+H.ctx.games[p.id]+')').join(', ')}</b>. Thử tăng số sân hoặc giảm ván tối thiểu.`);
+  const gs = H.list.map(p => H.ctx.games[p.id]);
   const lo = Math.min.apply(null, gs), hi = Math.max.apply(null, gs);
   if(hi - lo >= 3)
-    w.push(`Chênh lệch số ván khá lớn (${lo}–${hi} ván). Thường do lệch tỉ lệ nam/nữ ở chế độ đang chọn.`);
-  const dup = Object.keys(ctx.partner).filter(k => ctx.partner[k] > 1).length;
+    w.push(`Chênh lệch số ván khá lớn (${lo}–${hi}). Thường do lệch tỉ lệ nam/nữ ở chế độ đang chọn.`);
+  const dup = Object.keys(H.ctx.partner).filter(k => H.ctx.partner[k] > 1).length;
   if(dup)
     w.push(`Có ${dup} cặp phải đánh chung nhiều hơn 1 lần (không tránh được với số người hiện tại).`);
-  $('warnings').innerHTML = w.length ? `<div class="warn"><b>Lưu ý</b><ul><li>${w.join('</li><li>')}</li></ul></div>` : '';
+  $('warnings').innerHTML = w.length
+    ? `<div class="warn"><b>Lưu ý</b><ul><li>${w.join('</li><li>')}</li></ul></div>` : '';
 
-  $('rounds').innerHTML = rounds.map((r, i) => `
+  /* --- các vòng --- */
+  const rate = !s.cfg.ignoreRating;
+  $('rounds').innerHTML = H.rounds.map((rd, ri) => `
     <div class="round">
-      <header><span>Vòng ${i+1}</span>
-        <span class="rest">${r.resting.length ? 'Nghỉ: ' + r.resting.map(p=>esc(p.name)).join(', ') : 'Tất cả đều ra sân'}</span>
-      </header>
-      <div class="courts">${r.matches.map((m, c) => `
-        <div class="court">
-          <div class="cname">Sân ${c+1}</div>
-          <div class="vs">
-            <div class="team">${pName(m.t1[0])}${pName(m.t1[1])}
-              <span class="sum">Tổng ${(m.t1[0].rating + m.t1[1].rating).toFixed(2)}</span></div>
-            <div class="mid">VS</div>
-            <div class="team">${pName(m.t2[0])}${pName(m.t2[1])}
-              <span class="sum">Tổng ${(m.t2[0].rating + m.t2[1].rating).toFixed(2)}</span></div>
-          </div>
-        </div>`).join('')}</div>
+      <div class="rhead">
+        <span class="rt">Vòng ${ri + 1}</span>
+        <span class="rest">${rd.resting.length ? 'Nghỉ: ' + rd.resting.map(p=>esc(p.name)).join(', ') : 'Tất cả ra sân'}</span>
+      </div>
+      <div class="rounds-grid">${rd.matches.map((m, ci) => {
+        const fin = m.win === 1 || m.win === 2;
+        return `<button class="match" data-r="${ri}" data-c="${ci}">
+          <span class="mhead">
+            <span>Sân ${ci + 1}</span>
+            <span class="mstate ${fin ? 'done' : ''}">${fin ? '✓ Đã ghi' : 'Chạm để nhập điểm'}</span>
+          </span>
+          <span class="mteam ${m.win === 1 ? 'win' : ''}">
+            <span class="names">${teamHtml(m.t1)}${rate ? ` <small class="meta">${teamSum(m.t1)}</small>` : ''}</span>
+            <span class="sc">${sv(m.s1)}</span>
+          </span>
+          <span class="mdiv"></span>
+          <span class="mteam ${m.win === 2 ? 'win' : ''}">
+            <span class="names">${teamHtml(m.t2)}${rate ? ` <small class="meta">${teamSum(m.t2)}</small>` : ''}</span>
+            <span class="sc">${sv(m.s2)}</span>
+          </span>
+        </button>`;
+      }).join('')}</div>
     </div>`).join('');
-
-  $('statsBody').innerHTML = list.slice()
-    .sort((a, b) => ctx.games[a.id] - ctx.games[b.id] || a.name.localeCompare(b.name, 'vi'))
-    .map(p => {
-      const mates = new Set();
-      Object.keys(ctx.partner).forEach(k => {
-        const [x, y] = k.split('|');
-        if(x === String(p.id)) mates.add(y); else if(y === String(p.id)) mates.add(x);
-      });
-      const g = ctx.games[p.id];
-      return `<tr>
-        <td>${esc(p.name)}</td>
-        <td><span class="tag ${p.gender==='M'?'m':'f'}">${p.gender==='M'?'Nam':'Nữ'}</span></td>
-        <td>${p.rating.toFixed(2)}</td>
-        <td${g < cfg.minGames ? ' class="bad"' : ''}>${g}</td>
-        <td>${rounds.length - g}</td>
-        <td>${mates.size}</td></tr>`;
-    }).join('');
 }
 
-function asText(){
-  if(!schedule) return '';
-  const modeName = { mixed:'Đôi nam nữ', split:'Tách nam nữ', free:'Ngẫu nhiên' }[schedule.cfg.mode];
-  let out = `LỊCH ĐÁNH PICKLEBALL — ${modeName}\n${schedule.list.length} người · ${schedule.cfg.courts} sân · ${schedule.rounds.length} vòng\n`;
-  schedule.rounds.forEach((r, i) => {
-    out += `\n--- VÒNG ${i+1} ---\n`;
-    r.matches.forEach((m, c) => {
-      out += `Sân ${c+1}: ${m.t1[0].name} & ${m.t1[1].name}  vs  ${m.t2[0].name} & ${m.t2[1].name}\n`;
-    });
-    if(r.resting.length) out += `Nghỉ: ${r.resting.map(p => p.name).join(', ')}\n`;
+/* ---- chọn / tạo / sửa buổi trận ---- */
+$('sessionSel').onchange = () => { S.sessionId = $('sessionSel').value; PBStore.saveLocal(); renderMatches(); };
+$('btnSessionNew').onclick = () => {
+  PBStore.addSession();
+  renderMatches();
+  PBStore.save();
+  $('cfgPanel').open = true;
+};
+$('btnSessionRename').onclick = () => {
+  const s = PBStore.session();
+  const n = prompt('Đổi tên buổi trận:', s.name);
+  if(n === null || !n.trim()) return;
+  s.name = n.trim().slice(0, 60);
+  render();
+  PBStore.save();
+};
+$('btnSessionDel').onclick = () => {
+  const s = PBStore.session();
+  if(!confirm(`Xoá buổi trận "${s.name}"? Kết quả đã nhập sẽ mất.`)) return;
+  PBStore.removeSession(s.id);
+  render();
+  PBStore.save();
+};
+$('noSession').onclick = () => $('btnSessionNew').click();
+
+function readCfg(){
+  const s = PBStore.session();
+  s.cfg = PBStore.normCfg({
+    mode:         $('cMode').value,
+    courts:       $('cCourts').value,
+    minGames:     $('cMin').value,
+    maxGames:     $('cMax').value,
+    cap:          $('cCap').value,
+    ignoreRating: $('cIgnoreRating').checked,
   });
+  $('cfgSummary').textContent = `${MODE[s.cfg.mode]} · ${s.cfg.courts} sân · tối thiểu ${s.cfg.minGames} ván`;
+}
+['cMode','cCourts','cMin','cMax','cCap','cIgnoreRating'].forEach(id =>
+  $(id).addEventListener('change', () => { readCfg(); PBStore.save(); }));
+
+$('cRoster').onchange = () => {
+  const s = PBStore.session();
+  if(s.rounds.length && !confirm('Đổi danh sách sẽ xoá lịch và kết quả của buổi này. Tiếp tục?')){
+    $('cRoster').value = s.rosterId;
+    return;
+  }
+  s.rosterId = $('cRoster').value;
+  s.rounds = []; s.playerIds = [];
+  renderMatches();
+  PBStore.save();
+};
+
+function doGenerate(){
+  const s = PBStore.session();
+  const r = PBStore.rosterOf(s);
+  if(!r){ toast('Buổi trận chưa gắn với danh sách nào'); return; }
+  if(PBStore.hasResults(s) &&
+     !confirm('Buổi này đã có kết quả. Tạo lịch mới sẽ xoá toàn bộ điểm đã nhập. Tiếp tục?')) return;
+
+  readCfg();
+  const res = PB.generate(r.players.filter(p => p.active), s.cfg);
+  if(res.error){
+    s.rounds = []; s.playerIds = [];
+    renderMatches();
+    $('warnings').innerHTML = `<div class="warn">${esc(res.error)}</div>`;
+    PBStore.save();
+    toast(res.error);
+    return;
+  }
+  s.playerIds = res.list.map(p => p.id);
+  s.rounds    = PB.toRounds(res);
+  PBStore.save();
+  renderMatches();
+  $('cfgPanel').open = false;
+  toast(`Đã tạo ${s.rounds.length} vòng · ${s.rounds.reduce((n,x)=>n+x.matches.length,0)} trận`);
+}
+$('btnGen').onclick   = doGenerate;
+$('btnRegen').onclick = doGenerate;
+
+/* ---- xuất ---- */
+function asText(){
+  const s = PBStore.session();
+  if(!s || !H) return '';
+  let out = `${s.name.toUpperCase()} — ${MODE[s.cfg.mode]}\n${H.list.length} người · ${s.cfg.courts} sân · ${H.rounds.length} vòng\n`;
+  H.rounds.forEach((rd, i) => {
+    out += `\n--- VÒNG ${i + 1} ---\n`;
+    rd.matches.forEach((m, c) => {
+      const sc = (m.win === 1 || m.win === 2) ? `  [${sv(m.s1)}-${sv(m.s2)}]` : '';
+      out += `Sân ${c+1}: ${m.t1.map(p=>p.name).join(' & ')}  vs  ${m.t2.map(p=>p.name).join(' & ')}${sc}\n`;
+    });
+    if(rd.resting.length) out += `Nghỉ: ${rd.resting.map(p=>p.name).join(', ')}\n`;
+  });
+  const st = PB.stats(H);
+  if(st.some(x => x.done)){
+    out += `\n--- THỐNG KÊ ---\n`;
+    st.forEach((x, i) => {
+      out += `${i+1}. ${x.p.name}: ${x.done} trận, thắng ${x.win}, thua ${x.loss} (${x.diff > 0 ? '+' : ''}${x.diff})\n`;
+    });
+  }
   return out;
 }
-
-function run(){
-  const res = PB.generate(players.filter(p => p.active), readCfg());
-  schedule = res.error ? null : res;
-  renderSchedule(res);
-  save();
-  $('resultPanel').scrollIntoView({ behavior:'smooth', block:'start' });
-}
-$('btnGen').onclick   = run;
-$('btnRegen').onclick = run;
-$('btnPrint').onclick = () => window.print();
-$('btnCopy').onclick  = async () => {
+$('btnCopy').onclick = async () => {
   const t = asText();
   if(!t) return;
-  try{ await navigator.clipboard.writeText(t); toast('Đã copy lịch'); }
+  try{ await navigator.clipboard.writeText(t); toast('Đã copy'); }
   catch(e){ prompt('Copy thủ công:', t); }
 };
-['cMode','cCourts','cMin','cMax','cCap','cBalance'].forEach(id => $(id).addEventListener('change', save));
+$('btnPrint').onclick = () => window.print();
+
+/* ============================ SHEET NHẬP ĐIỂM ============================ */
+let sheetRef = null, sheetWin = null;
+
+function setWin(w){
+  sheetWin = (w === 1 || w === 2) ? w : null;
+  $('sTeam1').classList.toggle('win', sheetWin === 1);
+  $('sTeam2').classList.toggle('win', sheetWin === 2);
+}
+function autoWin(){
+  const a = $('sScore1').value, b = $('sScore2').value;
+  if(a === '' || b === '') return;
+  setWin(+a === +b ? null : (+a > +b ? 1 : 2));
+}
+function openSheet(ri, ci){
+  const s = PBStore.session();
+  const m = s.rounds[ri] && s.rounds[ri].matches[ci];
+  const h = H && H.rounds[ri] && H.rounds[ri].matches[ci];
+  if(!m || !h) return;
+  sheetRef = { ri, ci };
+  $('sheetTitle').textContent = `Vòng ${ri + 1} · Sân ${ci + 1}`;
+  $('sNames1').innerHTML = teamHtml(h.t1);
+  $('sNames2').innerHTML = teamHtml(h.t2);
+  $('sScore1').value = m.s1 === null ? '' : m.s1;
+  $('sScore2').value = m.s2 === null ? '' : m.s2;
+  setWin(m.win);
+  $('sheet').classList.add('open');
+  $('sheetScrim').classList.add('on');
+}
+function closeSheet(){
+  $('sheet').classList.remove('open');
+  $('sheetScrim').classList.remove('on');
+  sheetRef = null;
+}
+
+$('rounds').addEventListener('click', e => {
+  const b = e.target.closest('.match');
+  if(b) openSheet(+b.dataset.r, +b.dataset.c);
+});
+$('sheetScrim').onclick = closeSheet;
+$('sheetClose').onclick = closeSheet;
+
+$('sheet').addEventListener('click', e => {
+  const st = e.target.closest('[data-step]');
+  if(st){
+    const inp = $('sScore' + st.dataset.step);
+    inp.value = Math.max(0, Math.min(99, (parseInt(inp.value, 10) || 0) + (+st.dataset.d)));
+    autoWin();
+    return;
+  }
+  const tm = e.target.closest('[data-team]');
+  if(tm) setWin(+tm.dataset.team);
+});
+$('sScore1').addEventListener('input', autoWin);
+$('sScore2').addEventListener('input', autoWin);
+
+$('sheetSave').onclick = () => {
+  if(!sheetRef) return;
+  const m = PBStore.session().rounds[sheetRef.ri].matches[sheetRef.ci];
+  const a = $('sScore1').value, b = $('sScore2').value;
+  m.s1  = a === '' ? null : Math.max(0, Math.min(99, parseInt(a, 10) || 0));
+  m.s2  = b === '' ? null : Math.max(0, Math.min(99, parseInt(b, 10) || 0));
+  m.win = sheetWin;
+  PBStore.save(true);                 // đẩy lên ngay, không chờ debounce
+  closeSheet();
+  renderRounds();
+  toast('Đã lưu kết quả');
+};
+$('sheetClear').onclick = () => {
+  if(!sheetRef) return;
+  const m = PBStore.session().rounds[sheetRef.ri].matches[sheetRef.ci];
+  m.s1 = m.s2 = null;
+  m.win = null;
+  PBStore.save(true);
+  closeSheet();
+  renderRounds();
+  toast('Đã xoá kết quả');
+};
 
 /* ============================ ĐỒNG BỘ ============================ */
 const STATUS = {
-  off:        ['', 'Ngoại tuyến — dữ liệu chỉ lưu trên máy này'],
-  connecting: ['connecting', 'Đang kết nối…'],
-  error:      ['error', 'Lỗi'],
+  off:        'Ngoại tuyến — dữ liệu chỉ lưu trên máy này',
+  connecting: 'Đang kết nối…',
+  error:      'Lỗi',
 };
 
-function setStatus(s, msg){
-  const on = s === 'live';
-  $('led').className = 'led ' + (on ? 'live' : (STATUS[s] ? STATUS[s][0] : ''));
+function setStatus(st, msg){
+  const on = st === 'live';
+  $('led').className = 'led ' + (on ? 'live' : (STATUS[st] && st !== 'off' ? st : ''));
   $('statusText').innerHTML = on
-    ? `<b>Đang đồng bộ</b> · phòng <b>${esc(currentRoom)}</b> · mọi thay đổi hiện ngay với cả nhóm`
-    : esc((STATUS[s] ? STATUS[s][1] : '') + (msg ? ' — ' + msg : ''));
-  $('btnJoin').style.display  = on ? 'none' : '';
-  $('btnLeave').style.display = on ? '' : 'none';
-  $('btnShare').style.display = on ? '' : 'none';
-  $('roomId').disabled = on || s === 'connecting';
-  $('btnJoin').disabled = s === 'connecting';
+    ? `<b>Đang đồng bộ</b> · phòng <b>${esc(currentRoom)}</b>`
+    : esc((STATUS[st] || STATUS.off) + (msg ? ' — ' + msg : ''));
+  $('btnJoin').classList.toggle('hide', on);
+  $('btnLeave').classList.toggle('hide', !on);
+  $('btnShare').classList.toggle('hide', !on);
+  $('roomId').disabled  = on || st === 'connecting';
+  $('btnJoin').disabled = st === 'connecting';
 }
 
 function normRoom(s){
@@ -299,51 +519,40 @@ function normRoom(s){
 }
 
 function applyRemote(d){
-  applyingRemote = true;
-  if(Array.isArray(d.players)) players = d.players.map(normPlayer);
-  writeCfg(d.cfg);
-  renderPlayers();
-  schedule = d.schedule ? PB.deserialize(d.schedule, players) : null;
-  if(schedule) renderSchedule(schedule);
-  else $('resultPanel').style.display = 'none';
-  applyingRemote = false;
-  saveLocal();
+  closeSheet();                       // chỉ số trận có thể đổi -> đóng sheet cho chắc
+  PBStore.applyRemote(d);
+  render();
+  toast('Có cập nhật từ thành viên khác');
 }
 
 async function join(silent){
   const id = normRoom($('roomId').value);
-  if(!id){
-    toast('Mã phòng: 3–32 ký tự, chỉ chữ thường / số / dấu gạch ngang');
-    return;
-  }
+  if(!id){ toast('Mã phòng: 3–32 ký tự, chữ thường / số / gạch ngang'); return; }
   currentRoom = id;
+
   let remote;
-  try{
-    remote = await PBSync.connect(id, d => { applyRemote(d); toast('Có cập nhật từ thành viên khác'); }, setStatus);
-  }catch(e){
-    currentRoom = null;
-    return;                              // setStatus('error', …) đã hiện lý do
-  }
+  try{ remote = await PBSync.connect(id, applyRemote, setStatus); }
+  catch(e){ currentRoom = null; return; }        // setStatus đã hiện lý do
 
   if(remote){
-    const n = (remote.players || []).length;
-    if(!silent && players.length &&
-       !confirm(`Phòng "${id}" đã có sẵn ${n} người chơi.\n\nTải dữ liệu của phòng về máy? Danh sách ${players.length} người hiện có trên máy bạn sẽ bị thay thế.`)){
+    const nr = (remote.rosters || []).length, ns = (remote.sessions || []).length;
+    if(!silent && !confirm(`Phòng "${id}" đã có ${nr} danh sách người chơi và ${ns} buổi trận.\n\nTải về máy? Dữ liệu hiện có trên máy bạn sẽ bị thay thế.`)){
       PBSync.disconnect();
       currentRoom = null;
       return;
     }
-    applyRemote(remote);
+    PBStore.applyRemote(remote);
+    render();
     toast(`Đã vào phòng ${id}`);
   }else{
-    save();                              // phòng mới: đẩy dữ liệu đang có lên làm dữ liệu gốc
+    PBStore.save(true);                          // phòng mới: đẩy dữ liệu đang có lên
     toast(`Đã tạo phòng ${id}`);
   }
   location.hash = 'room=' + id;
   setStatus('live');
 }
 
-$('btnJoin').onclick  = () => join(false);
+$('btnJoin').onclick = () => join(false);
 $('roomId').addEventListener('keydown', e => { if(e.key === 'Enter') join(false); });
 $('btnLeave').onclick = () => {
   PBSync.disconnect();
@@ -359,19 +568,21 @@ $('btnShare').onclick = async () => {
 };
 
 /* ============================ KHỞI ĐỘNG ============================ */
-load();
-if(!players.length) SAMPLE.forEach(s => addPlayer(s[0], s[1], s[2]));
-renderPlayers();
-if(schedule) renderSchedule(schedule);
+const hadData = PBStore.load();
+if(!hadData){
+  SAMPLE.forEach(s => addPlayer(s[0], s[1], s[2]));   // lần đầu mở: có sẵn dữ liệu để thử
+  PBStore.saveLocal();
+}
+render();
 
 if(!PBSync.configured()){
-  $('syncPanel').innerHTML =
-    '<div class="status"><span class="led"></span><span>Chưa cấu hình Firebase — app đang chạy ngoại tuyến, ' +
-    'dữ liệu chỉ lưu trên máy này. Xem <b>FIREBASE.md</b> để bật đồng bộ nhiều người.</span></div>';
+  $('syncBox').innerHTML =
+    '<p class="dstatus">Chưa cấu hình Firebase — app chạy ngoại tuyến, dữ liệu chỉ lưu trên máy này. ' +
+    'Xem <b>FIREBASE.md</b> để bật đồng bộ nhóm.</p>';
 }else{
   setStatus('off');
   const m = /room=([a-z0-9-]+)/i.exec(location.hash);
-  if(m){ $('roomId').value = m[1]; join(true); }   // mở bằng link mời -> vào thẳng, lấy dữ liệu phòng
+  if(m){ $('roomId').value = m[1]; join(true); }      // mở bằng link mời -> vào thẳng
 }
 
 })();

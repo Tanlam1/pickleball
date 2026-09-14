@@ -1,37 +1,62 @@
 # Chia trận Pickleball
 
-Web app tĩnh để xếp lịch đánh Pickleball theo số sân, đảm bảo số ván tối thiểu cho mỗi người,
-hạn chế trùng cặp và cân bằng trình độ. Không cần cài đặt, không cần server.
+Web app tĩnh để xếp lịch đánh Pickleball và ghi kết quả từng trận. Thiết kế ưu tiên điện thoại —
+chạm vào trận là nhập được điểm ngay tại sân. Không cần cài đặt, không cần server.
 
 Đồng bộ nhiều người qua Firebase là **tuỳ chọn** — không cấu hình thì app vẫn chạy đầy đủ ở chế độ lưu-trên-máy.
 
-## Chức năng
+## Hai màn hình, mở bằng menu ☰ ở góc trái trên
 
-- **Quản lý người chơi** — tên, giới tính, Pickleball rating; sửa trực tiếp trên bảng, tick chọn ai tham gia buổi này. Nhập hàng loạt bằng dán text (`Tên, Nam/Nữ, Rating`).
-- **3 chế độ chia trận**
-  - *Đôi nam nữ* — mỗi đội 1 nam + 1 nữ
-  - *Tách nam nữ* — đôi nam riêng, đôi nữ riêng; số sân tự chia theo bên nào đang thiếu ván hơn
-  - *Ngẫu nhiên tự do* — không phân biệt giới tính
-- **Ràng buộc** — số sân, số ván tối thiểu / tối đa mỗi người, giới hạn số người mỗi lần chia
-- **Tối ưu** — ưu tiên người đánh ít ván và nghỉ lâu nhất; tránh lặp bạn cùng đội / đối thủ; cân bằng tổng rating 2 đội mỗi ván
-- **Kết quả** — lịch theo từng vòng (ai đánh sân nào, ai nghỉ), thống kê số ván mỗi người, cảnh báo khi không đáp ứng được ràng buộc
-- **Xuất** — copy dạng text để dán vào nhóm chat, hoặc in / lưu PDF
-- **Đồng bộ nhóm** *(tuỳ chọn)* — mã phòng chung qua Firebase Firestore, mọi thay đổi hiện ngay với cả nhóm
+### 1. Danh sách người chơi
+
+Tạo được **nhiều danh sách** (nhóm tối thứ 3, nhóm cuối tuần, giải nội bộ…), mỗi danh sách độc lập.
+Mỗi dòng gồm **Tên · Giới tính · Rating · Chơi** (tick chọn ai có mặt buổi này).
+
+- Giới tính bấm một phát là đổi Nam ⇄ Nữ
+- Nhập hàng loạt bằng dán text: `Tên, Nam/Nữ, Rating` mỗi dòng
+- Xoá một danh sách sẽ xoá luôn các buổi trận dùng nó (có cảnh báo trước)
+
+### 2. Tạo trận
+
+Tạo được **nhiều buổi trận**, mỗi buổi có tên riêng (mặc định `Buổi 14/9`, đổi được).
+
+**Tuỳ chọn chia:**
+
+| | |
+|---|---|
+| Chế độ | Đôi nam nữ · Tách nam nữ · Ngẫu nhiên tự do |
+| Số sân | bao nhiêu trận chạy song song mỗi vòng |
+| Ván tối thiểu / tối đa mỗi người | |
+| Số người tối đa | 0 = lấy hết |
+| **Bỏ qua rating** | chia không quan tâm trình độ, và ẩn rating khỏi thẻ trận |
+
+**Ghi kết quả:** chạm vào bất kỳ trận nào → mở bảng nhập điểm với nút +/− cỡ lớn.
+Điểm cao hơn tự được đánh dấu thắng, hoặc chạm thẳng vào một đội để chọn đội thắng.
+
+**Bảng thống kê** nằm ngay đầu màn hình, cập nhật tức thì: số trận đã đấu, thắng, thua, hiệu số điểm,
+xếp hạng theo số trận thắng.
+
+## Thuật toán chia
+
+Mỗi vòng ưu tiên người **đánh ít ván nhất**, rồi **nghỉ lâu nhất**. Với nhóm đã chọn, app thử ~240 cách xáo
+rồi lấy phương án điểm phạt thấp nhất: trùng bạn cùng đội (phạt nặng), trùng đối thủ (phạt nhẹ),
+chênh lệch tổng rating 2 đội (bỏ qua nếu bật "Bỏ qua rating").
 
 ## Cấu trúc
 
 ```
-index.html              giao diện
-css/app.css             style (tự đổi màu theo light/dark của máy)
-js/scheduler.js         thuật toán chia trận — thuần tuý, chạy được cả trong Node
+index.html              giao diện — drawer, 2 màn hình, sheet nhập điểm
+css/app.css             style mobile-first, tự đổi màu theo light/dark của máy
+js/scheduler.js         thuật toán chia trận + thống kê — thuần tuý, chạy được cả trong Node
+js/store.js             trạng thái: nhiều danh sách, nhiều buổi trận, lưu localStorage
 js/sync.js              đồng bộ Firestore (nạp SDK bằng dynamic import)
-js/app.js               nối giao diện với 2 file trên
+js/app.js               giao diện, nối 3 file trên
 js/firebase-config.js   cấu hình Firebase — để trống = chạy ngoại tuyến
 firestore.rules         security rules, dán vào Firebase Console
 FIREBASE.md             hướng dẫn bật đồng bộ nhiều người
 ```
 
-Không dùng thư viện ngoài nào. Firebase SDK chỉ được tải khi bạn bấm **Kết nối**,
+Không dùng thư viện ngoài nào. Firebase SDK chỉ được tải khi bấm **Kết nối**,
 nên app vẫn chạy đầy đủ khi không có mạng hoặc chưa cấu hình gì.
 
 ## Chạy thử trên máy

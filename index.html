@@ -2,123 +2,214 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
 <title>Chia trận Pickleball</title>
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-<div class="wrap">
 
-<h1>Chia trận Pickleball</h1>
-<p class="sub">Xếp lịch đánh theo số sân, đảm bảo số ván tối thiểu cho mỗi người, hạn chế trùng cặp và cân bằng trình độ.</p>
+<header class="topbar">
+  <button class="icon" id="btnMenu" aria-label="Mở menu">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+    </svg>
+  </button>
+  <h1 id="pageTitle">Danh sách người chơi</h1>
+  <span class="led" id="led" title="Trạng thái đồng bộ"></span>
+</header>
 
-<!-- ĐỒNG BỘ -->
-<section class="panel sync noprint" id="syncPanel">
-  <div class="grow">
-    <label>Mã phòng chung</label>
+<nav class="drawer" id="drawer" aria-label="Menu chính">
+  <div class="dhead">
+    <div class="dtitle">Pickleball</div>
+    <div class="dsub">Chia trận &amp; ghi kết quả</div>
+  </div>
+  <button class="dnav" data-view="players">
+    <span class="di">1</span><span class="dlabel">Danh sách người chơi</span><span class="dcount" id="navRosters"></span>
+  </button>
+  <button class="dnav" data-view="matches">
+    <span class="di">2</span><span class="dlabel">Tạo trận</span><span class="dcount" id="navSessions"></span>
+  </button>
+
+  <div class="dsync" id="syncBox">
+    <label>Đồng bộ nhóm — mã phòng</label>
     <input type="text" id="roomId" placeholder="vd: cmc-pickleball" autocomplete="off" spellcheck="false">
+    <div class="drow">
+      <button class="primary" id="btnJoin">Kết nối</button>
+      <button id="btnShare" class="hide">Link mời</button>
+      <button id="btnLeave" class="hide">Ngắt</button>
+    </div>
+    <p class="dstatus" id="statusText"></p>
   </div>
-  <div class="auto"><button class="primary" id="btnJoin">Kết nối</button></div>
-  <div class="auto"><button id="btnShare" style="display:none">Copy link mời</button></div>
-  <div class="auto"><button id="btnLeave" style="display:none">Ngắt</button></div>
-  <div class="status"><span class="led" id="led"></span><span id="statusText"></span></div>
-</section>
+</nav>
+<div class="scrim" id="scrim"></div>
 
-<!-- 1. NGƯỜI CHƠI -->
-<section class="panel noprint">
-  <h2><span class="n">1</span> Người chơi <span class="note" id="pcount"></span></h2>
+<main>
 
-  <div class="row">
-    <div style="flex:2 1 200px"><label>Tên</label>
-      <input type="text" id="fName" placeholder="Nguyễn Văn A" autocomplete="off"></div>
-    <div class="narrow"><label>Giới tính</label>
-      <select id="fGender"><option value="M">Nam</option><option value="F">Nữ</option></select></div>
-    <div class="narrow"><label>Rating</label>
-      <input type="number" id="fRating" value="3.5" step="0.25" min="1" max="8"></div>
-    <div class="auto"><button class="primary" id="btnAdd">Thêm</button></div>
-  </div>
-
-  <div class="tscroll" style="margin-top:16px"><table>
-    <thead><tr>
-      <th style="width:34px">Chơi</th><th>Tên</th><th style="width:100px">Giới tính</th>
-      <th style="width:90px">Rating</th><th style="width:52px"></th>
-    </tr></thead>
-    <tbody id="plist"></tbody>
-  </table></div>
-  <p class="empty" id="pempty">Chưa có người chơi nào.</p>
-
-  <div class="actions">
-    <button id="btnAll">Chọn tất cả</button>
-    <button id="btnNone">Bỏ chọn tất cả</button>
-    <button id="btnSample">Nạp 14 người mẫu</button>
-    <button id="btnBulk">Nhập hàng loạt</button>
-    <button class="ghost" id="btnClear">Xoá hết</button>
+<!-- ============ 1. DANH SÁCH NGƯỜI CHƠI ============ -->
+<section id="viewPlayers">
+  <div class="panel">
+    <div class="picker">
+      <select id="rosterSel" aria-label="Chọn danh sách"></select>
+      <button class="icon sq" id="btnRosterNew" title="Tạo danh sách mới">＋</button>
+      <button class="icon sq" id="btnRosterRename" title="Đổi tên">✎</button>
+      <button class="icon sq danger" id="btnRosterDel" title="Xoá danh sách">🗑</button>
+    </div>
+    <p class="meta" id="pcount"></p>
   </div>
 
-  <div id="bulkBox" style="display:none;margin-top:14px">
-    <label>Mỗi dòng một người: <code>Tên, Nam/Nữ, Rating</code></label>
-    <textarea id="bulkText" placeholder="Minh, Nam, 4.0&#10;Lan, Nữ, 3.25&#10;Hùng, Nam, 3.5"></textarea>
+  <div class="panel">
+    <div class="row">
+      <div class="f2"><label>Tên</label>
+        <input type="text" id="fName" placeholder="Nguyễn Văn A" autocomplete="off"></div>
+      <div class="f-sm"><label>Giới tính</label>
+        <select id="fGender"><option value="M">Nam</option><option value="F">Nữ</option></select></div>
+      <div class="f-sm"><label>Rating</label>
+        <input type="number" id="fRating" value="3.5" step="0.25" min="1" max="8" inputmode="decimal"></div>
+      <div class="f-auto"><button class="primary" id="btnAdd">Thêm</button></div>
+    </div>
+
+    <div class="tscroll"><table>
+      <thead><tr>
+        <th>Tên</th>
+        <th class="w-gt">Giới tính</th>
+        <th class="w-rt">Rating</th>
+        <th class="w-ck">Chơi</th>
+        <th class="w-x"></th>
+      </tr></thead>
+      <tbody id="plist"></tbody>
+    </table></div>
+    <p class="empty" id="pempty">Chưa có người chơi nào trong danh sách này.</p>
+
     <div class="actions">
-      <button class="primary" id="btnBulkGo">Nhập</button>
-      <button id="btnBulkCancel">Huỷ</button>
+      <button id="btnAll">Tick tất cả</button>
+      <button id="btnNone">Bỏ tick tất cả</button>
+      <button id="btnSample">Nạp 14 người mẫu</button>
+      <button id="btnBulk">Nhập hàng loạt</button>
+    </div>
+
+    <div id="bulkBox" class="hide">
+      <label>Mỗi dòng một người: <code>Tên, Nam/Nữ, Rating</code></label>
+      <textarea id="bulkText" placeholder="Minh, Nam, 4.0&#10;Lan, Nữ, 3.25&#10;Hùng, Nam, 3.5"></textarea>
+      <div class="actions">
+        <button class="primary" id="btnBulkGo">Nhập</button>
+        <button id="btnBulkCancel">Huỷ</button>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- 2. CẤU HÌNH -->
-<section class="panel noprint">
-  <h2><span class="n">2</span> Cấu hình</h2>
-  <div class="row">
-    <div><label>Chế độ chia</label><select id="cMode">
-      <option value="mixed">Đôi nam nữ (mỗi đội 1 nam + 1 nữ)</option>
-      <option value="split">Tách nam nữ (đôi nam riêng, đôi nữ riêng)</option>
-      <option value="free">Ngẫu nhiên tự do</option>
-    </select></div>
-    <div class="narrow"><label>Số sân</label>
-      <input type="number" id="cCourts" value="2" min="1" max="20"></div>
-    <div class="narrow"><label>Ván tối thiểu<br>mỗi người</label>
-      <input type="number" id="cMin" value="4" min="1" max="50"></div>
-    <div class="narrow"><label>Ván tối đa<br>(0 = không giới hạn)</label>
-      <input type="number" id="cMax" value="0" min="0" max="50"></div>
-    <div class="narrow"><label>Số người tối đa<br>(0 = tất cả)</label>
-      <input type="number" id="cCap" value="0" min="0" max="200"></div>
+<!-- ============ 2. TẠO TRẬN ============ -->
+<section id="viewMatches" class="hide">
+  <div class="panel">
+    <div class="picker">
+      <select id="sessionSel" aria-label="Chọn buổi trận"></select>
+      <button class="icon sq" id="btnSessionNew" title="Tạo buổi trận mới">＋</button>
+      <button class="icon sq" id="btnSessionRename" title="Đổi tên">✎</button>
+      <button class="icon sq danger" id="btnSessionDel" title="Xoá buổi trận">🗑</button>
+    </div>
   </div>
-  <div style="margin-top:12px">
-    <label class="check"><input type="checkbox" id="cBalance" checked>
-      Cân bằng trình độ giữa 2 đội trong mỗi ván</label>
-  </div>
-  <div class="actions">
-    <button class="primary" id="btnGen">Tạo lịch</button>
-    <button id="btnRegen">Tạo lại (xáo khác)</button>
+
+  <p class="empty panel" id="noSession">Chưa có buổi trận nào. Bấm <b>＋</b> ở trên để tạo.</p>
+
+  <div id="sessionBody" class="hide">
+    <details class="panel" id="cfgPanel">
+      <summary>Cấu hình chia trận <span class="meta" id="cfgSummary"></span></summary>
+      <div class="cfgbody">
+        <div class="row">
+          <div><label>Dùng danh sách</label><select id="cRoster"></select></div>
+          <div><label>Chế độ chia</label><select id="cMode">
+            <option value="mixed">Đôi nam nữ (mỗi đội 1 nam + 1 nữ)</option>
+            <option value="split">Tách nam nữ (đôi nam riêng, đôi nữ riêng)</option>
+            <option value="free">Ngẫu nhiên tự do</option>
+          </select></div>
+        </div>
+        <div class="row">
+          <div class="f-sm"><label>Số sân</label>
+            <input type="number" id="cCourts" min="1" max="20" inputmode="numeric"></div>
+          <div class="f-sm"><label>Ván tối thiểu</label>
+            <input type="number" id="cMin" min="1" max="50" inputmode="numeric"></div>
+          <div class="f-sm"><label>Ván tối đa<br><i>0 = không giới hạn</i></label>
+            <input type="number" id="cMax" min="0" max="50" inputmode="numeric"></div>
+          <div class="f-sm"><label>Số người tối đa<br><i>0 = tất cả</i></label>
+            <input type="number" id="cCap" min="0" max="200" inputmode="numeric"></div>
+        </div>
+        <label class="check"><input type="checkbox" id="cIgnoreRating">
+          Bỏ qua rating — chia không quan tâm trình độ</label>
+        <div class="actions">
+          <button class="primary" id="btnGen">Tạo lịch</button>
+          <button id="btnRegen">Tạo lại (xáo khác)</button>
+        </div>
+      </div>
+    </details>
+
+    <div class="panel" id="standPanel">
+      <div class="phead">
+        <h2>Bảng thống kê</h2>
+        <span class="meta" id="standMeta"></span>
+      </div>
+      <div class="tscroll"><table class="stats">
+        <thead><tr>
+          <th class="w-rk">#</th><th>Tên</th>
+          <th class="num">Đấu</th><th class="num">Thắng</th><th class="num">Thua</th><th class="num">+/−</th>
+        </tr></thead>
+        <tbody id="standBody"></tbody>
+      </table></div>
+    </div>
+
+    <div id="warnings"></div>
+    <div id="rounds"></div>
+
+    <div class="panel actions noprint">
+      <button id="btnCopy">Copy dạng text</button>
+      <button id="btnPrint">In / Lưu PDF</button>
+    </div>
   </div>
 </section>
 
-<!-- 3. KẾT QUẢ -->
-<section class="panel" id="resultPanel" style="display:none">
-  <h2><span class="n">3</span> Lịch thi đấu <span class="note" id="summary"></span></h2>
-  <div id="warnings"></div>
-  <div id="rounds"></div>
+</main>
 
-  <h2 style="margin-top:26px">Thống kê</h2>
-  <div class="tscroll"><table class="stats">
-    <thead><tr>
-      <th>Tên</th><th style="width:70px">GT</th><th style="width:80px">Rating</th>
-      <th style="width:70px">Số ván</th><th style="width:70px">Nghỉ</th><th style="width:110px">Bạn cùng đội</th>
-    </tr></thead>
-    <tbody id="statsBody"></tbody>
-  </table></div>
-
-  <div class="actions noprint">
-    <button id="btnCopy">Copy dạng text</button>
-    <button id="btnPrint">In / Lưu PDF</button>
+<!-- ============ NHẬP ĐIỂM ============ -->
+<div class="scrim" id="sheetScrim"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="sgrip"></div>
+  <div class="shead">
+    <span id="sheetTitle">Nhập điểm</span>
+    <button class="icon" id="sheetClose" aria-label="Đóng">✕</button>
   </div>
-</section>
+  <p class="shint">Chạm vào một đội để chọn đội thắng.</p>
 
+  <button class="steam" id="sTeam1" data-team="1">
+    <span class="snames" id="sNames1"></span>
+    <span class="swin">Thắng</span>
+  </button>
+  <div class="stepper">
+    <button class="icon sq" data-step="1" data-d="-1" aria-label="Giảm điểm đội 1">−</button>
+    <input type="number" id="sScore1" min="0" max="99" inputmode="numeric" aria-label="Điểm đội 1">
+    <button class="icon sq" data-step="1" data-d="1" aria-label="Tăng điểm đội 1">＋</button>
+  </div>
+
+  <button class="steam" id="sTeam2" data-team="2">
+    <span class="snames" id="sNames2"></span>
+    <span class="swin">Thắng</span>
+  </button>
+  <div class="stepper">
+    <button class="icon sq" data-step="2" data-d="-1" aria-label="Giảm điểm đội 2">−</button>
+    <input type="number" id="sScore2" min="0" max="99" inputmode="numeric" aria-label="Điểm đội 2">
+    <button class="icon sq" data-step="2" data-d="1" aria-label="Tăng điểm đội 2">＋</button>
+  </div>
+
+  <div class="sfoot">
+    <button class="ghost" id="sheetClear">Xoá kết quả</button>
+    <button class="primary" id="sheetSave">Lưu</button>
+  </div>
 </div>
+
 <div id="toast"></div>
 
 <script src="js/firebase-config.js"></script>
 <script src="js/scheduler.js"></script>
+<script src="js/store.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/app.js"></script>
 </body>

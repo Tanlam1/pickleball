@@ -16,8 +16,9 @@ Máy C ──┘         (1 document)               └──> Máy D (thấy ng
 ```
 
 - Mỗi nhóm dùng một **mã phòng** (ví dụ `cmc-pickleball`). Ai nhập đúng mã đó thì vào chung dữ liệu.
-- Một phòng = một document Firestore chứa `players`, `cfg` (cấu hình), `schedule` (lịch đã tạo).
+- Một phòng = một document Firestore chứa `rosters` (các danh sách người chơi) và `sessions` (các buổi trận, kèm lịch và điểm đã nhập).
 - Ai sửa gì, các máy khác nhận được sau chưa tới 1 giây qua `onSnapshot` (real-time listener).
+- Nhập điểm được đẩy lên **ngay lập tức**; sửa danh sách thì gom lại 700ms rồi mới ghi một lần.
 - Đăng nhập **ẩn danh** — không ai phải tạo tài khoản.
 - Mất mạng vẫn dùng được bình thường, dữ liệu vẫn lưu trên máy.
 
@@ -140,7 +141,13 @@ Hạn mức có thể đổi — kiểm tra tại https://firebase.google.com/pr
 
 **Giới hạn của mô hình hiện tại:** ai biết mã phòng thì sửa được phòng đó. Với một CLB quen biết nhau thì ổn — đặt mã phòng khó đoán một chút (vd `cmc-pkb-2026-x7q`) là đủ.
 
-**Xung đột khi sửa cùng lúc:** cả phòng là một document, ghi sau đè ghi trước. Nếu hai người cùng thêm người chơi trong vòng ~1 giây, một thay đổi có thể bị mất. Thực tế hiếm gặp vì thường chỉ một người phụ trách xếp trận. Muốn xử lý triệt để thì tách mỗi người chơi thành một document con (`rooms/{id}/players/{playerId}`) để các thay đổi tự gộp.
+**Xung đột khi sửa cùng lúc:** cả phòng là một document, ghi sau đè ghi trước. Nếu hai người cùng thao tác trong vòng dưới một giây, một thay đổi có thể bị mất.
+
+Điều này đáng lưu ý nhất khi **nhiều người cùng ghi điểm trên các sân khác nhau**. App đã thu hẹp khoảng trống bằng cách đẩy điểm lên ngay khi bấm Lưu (không chờ debounce), nên rủi ro thấp — nhưng không phải bằng không.
+
+Cách làm an toàn: **để một người phụ trách nhập điểm cho cả buổi.** Người khác vẫn xem được mọi thứ theo thời gian thực.
+
+Muốn nhiều người cùng ghi điểm thật sự an toàn thì phải tách mỗi buổi trận thành một document riêng (`rooms/{id}/sessions/{sessionId}`), khi đó hai người ghi hai buổi khác nhau sẽ không đè nhau.
 
 ### Muốn siết chặt: chỉ người phụ trách được sửa
 

@@ -1,4 +1,4 @@
-/* scheduler.js — thuật toán chia trận.
+/* scheduler.js — thuật toán chia trận + thống kê kết quả.
    Thuần tuý: không đụng DOM, không Firebase. Chạy được cả trong trình duyệt lẫn Node. */
 (function (root) {
 'use strict';
@@ -8,13 +8,13 @@ const W_OPP     = 22;    // phạt trùng đối thủ
 const W_RATING  = 10;    // phạt lệch trình độ giữa 2 đội
 const TRIALS    = 240;   // số lần thử xáo mỗi vòng
 
-/* ID ngẫu nhiên thay vì số tăng dần — tránh trùng khi nhiều người cùng thêm người chơi */
-function newId(){ return 'p' + Math.random().toString(36).slice(2, 10); }
+/* ID ngẫu nhiên thay vì số tăng dần — tránh trùng khi nhiều người cùng thêm */
+function newId(pre){ return (pre || 'p') + Math.random().toString(36).slice(2, 10); }
 
 const pk = (a, b) => a.id < b.id ? a.id + '|' + b.id : b.id + '|' + a.id;
 
 function makeCtx(list, cfg){
-  const c = { players: list, cfg, games: {}, rest: {}, partner: {}, opp: {} };
+  const c = { players: list, cfg: cfg || {}, games: {}, rest: {}, partner: {}, opp: {} };
   list.forEach(p => { c.games[p.id] = 0; c.rest[p.id] = 0; });
   return c;
 }
@@ -25,7 +25,7 @@ function score(matches, ctx){
     s += W_PARTNER * (Math.pow(ctx.partner[pk(m.t1[0], m.t1[1])] || 0, 2)
                     + Math.pow(ctx.partner[pk(m.t2[0], m.t2[1])] || 0, 2));
     for(const a of m.t1) for(const b of m.t2) s += W_OPP * (ctx.opp[pk(a, b)] || 0);
-    if(ctx.cfg.balance){
+    if(!ctx.cfg.ignoreRating){
       s += W_RATING * Math.abs(m.t1[0].rating + m.t1[1].rating - m.t2[0].rating - m.t2[1].rating);
     }
   }
@@ -139,12 +139,12 @@ function applyCap(list, cap, mode){
   return list.filter(p => keep.has(p));                 // giữ nguyên thứ tự danh sách
 }
 
-/* cfg = { mode, courts, minGames, maxGames, cap, balance } */
+/* cfg = { mode, courts, minGames, maxGames, cap, ignoreRating } */
 function generate(activeList, cfg){
   const list = applyCap(activeList, Math.max(0, cfg.cap || 0), cfg.mode);
   const dropped = activeList.filter(p => list.indexOf(p) === -1);
 
-  if(list.length < 4) return { error: 'Cần ít nhất 4 người tham gia.' };
+  if(list.length < 4) return { error: 'Cần ít nhất 4 người được tick "Chơi".' };
   const nM = list.filter(p => p.gender === 'M').length, nF = list.length - nM;
   if(cfg.mode === 'mixed' && (nM < 2 || nF < 2))
     return { error: 'Chế độ đôi nam nữ cần tối thiểu 2 nam và 2 nữ.' };
@@ -169,44 +169,65 @@ function generate(activeList, cfg){
   return { ctx, rounds, cfg, list, dropped };
 }
 
-/* ---- Chuyển đổi để lưu lên Firestore: chỉ giữ id, không giữ tham chiếu object ---- */
-function serialize(res){
-  if(!res || res.error || !res.rounds) return null;
-  return {
-    cfg: res.cfg,
-    listIds: res.list.map(p => p.id),
-    droppedIds: res.dropped.map(p => p.id),
-    rounds: res.rounds.map(r => ({
-      matches: r.matches.map(m => ({ a: m.t1.map(p => p.id), b: m.t2.map(p => p.id) })),
+/* ---- Dạng lưu trữ: chỉ id + ô điểm, để cất vào localStorage / Firestore ---- */
+
+function toRounds(res){
+  if(!res || res.error) return [];
+  return res.rounds.map(r => ({
+    matches: r.matches.map(m => ({
+      a: m.t1.map(p => p.id), b: m.t2.map(p => p.id),
+      s1: null, s2: null, win: null,
     })),
-  };
+  }));
 }
 
-function deserialize(data, players){
-  if(!data || !Array.isArray(data.rounds)) return null;
+/* Dựng lại object người chơi + tính lại người nghỉ mỗi vòng.
+   Trả null nếu danh sách người chơi đã đổi khiến lịch cũ không còn khớp. */
+function hydrate(session, players){
+  if(!session || !Array.isArray(session.rounds)) return null;
   const by = {};
   players.forEach(p => { by[p.id] = p; });
-  const list = (data.listIds || []).map(i => by[i]).filter(Boolean);
-  if(list.length < 4 || list.length !== (data.listIds || []).length) return null;
+
+  const ids = session.playerIds || [];
+  const list = ids.map(i => by[i]).filter(Boolean);
+  if(!list.length || list.length !== ids.length) return null;
 
   const rounds = [];
-  for(const r of data.rounds){
+  for(const r of session.rounds){
     const matches = [];
-    for(const m of r.matches || []){
+    for(const m of (r.matches || [])){
       const t1 = (m.a || []).map(i => by[i]), t2 = (m.b || []).map(i => by[i]);
-      /* roster đã đổi -> lịch cũ không còn hợp lệ, bỏ luôn còn hơn hiển thị sai */
       if(t1.length !== 2 || t2.length !== 2 || t1.concat(t2).some(p => !p)) return null;
-      matches.push({ t1, t2 });
+      matches.push({ t1, t2, s1: m.s1, s2: m.s2, win: m.win || null });
     }
     rounds.push({ matches, resting: [] });
   }
-  const ctx = makeCtx(list, data.cfg);
-  rounds.forEach(r => { r.resting = commit(r.matches, ctx); });   // dựng lại thống kê
-  return { ctx, rounds, cfg: data.cfg, list,
-           dropped: (data.droppedIds || []).map(i => by[i]).filter(Boolean) };
+  const ctx = makeCtx(list, session.cfg);
+  rounds.forEach(r => { r.resting = commit(r.matches, ctx); });
+  return { rounds, ctx, list };
 }
 
-const API = { newId, pk, makeCtx, commit, applyCap, generate, serialize, deserialize };
+/* Bảng thống kê: số trận được xếp, đã đấu, thắng, thua, hiệu số điểm */
+function stats(h){
+  if(!h) return [];
+  const s = {};
+  h.list.forEach(p => { s[p.id] = { p, sched: 0, done: 0, win: 0, loss: 0, diff: 0 }; });
+
+  h.rounds.forEach(r => r.matches.forEach(m => {
+    m.t1.concat(m.t2).forEach(p => { if(s[p.id]) s[p.id].sched++; });
+    if(m.win !== 1 && m.win !== 2) return;
+    const a = +m.s1 || 0, b = +m.s2 || 0;
+    m.t1.forEach(p => { const x = s[p.id]; if(!x) return;
+      x.done++; x.diff += a - b; if(m.win === 1) x.win++; else x.loss++; });
+    m.t2.forEach(p => { const x = s[p.id]; if(!x) return;
+      x.done++; x.diff += b - a; if(m.win === 2) x.win++; else x.loss++; });
+  }));
+
+  return Object.keys(s).map(k => s[k]).sort((x, y) =>
+    y.win - x.win || y.diff - x.diff || x.p.name.localeCompare(y.p.name, 'vi'));
+}
+
+const API = { newId, pk, makeCtx, commit, applyCap, generate, toRounds, hydrate, stats };
 if(typeof module !== 'undefined' && module.exports) module.exports = API;
 root.PB = API;
 

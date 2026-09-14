@@ -80,11 +80,12 @@ function disconnect(){
 
 function connected(){ return !!ref; }
 
-function push(data){
+/* now = true (vừa nhập điểm) -> ghi ngay, thu hẹp khoảng trống có thể xung đột */
+function push(data, now){
   if(!ref) return;
   queued = data;
   clearTimeout(timer);
-  timer = setTimeout(flush, DEBOUNCE);
+  if(now) flush(); else timer = setTimeout(flush, DEBOUNCE);
 }
 
 async function flush(){

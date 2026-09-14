@@ -3,10 +3,12 @@
 (function (root) {
 'use strict';
 
-const W_PARTNER = 120;   // phạt trùng bạn cùng đội (nặng nhất)
+const W_PARTNER = 120;   // phạt trùng bạn cùng đội
 const W_OPP     = 22;    // phạt trùng đối thủ
-const W_RATING  = 10;    // phạt lệch trình độ giữa 2 đội
-const TRIALS    = 240;   // số lần thử xáo mỗi vòng
+const W_RATING  = 14;    // phạt lệch trình độ, theo bình phương
+const W_OVERGAP = 600;   // phạt khi vượt ngưỡng lệch tối đa (xem mscore)
+const SEEDS     = 24;    // số lần xáo ngẫu nhiên, mỗi lần đều được tinh chỉnh lại
+const SWEEPS    = 40;    // số vòng tinh chỉnh tối đa (thường dừng sau 3-4 vòng)
 
 /* ID ngẫu nhiên thay vì số tăng dần — tránh trùng khi nhiều người cùng thêm */
 function newId(pre){ return (pre || 'p') + Math.random().toString(36).slice(2, 10); }
@@ -19,17 +21,107 @@ function makeCtx(list, cfg){
   return c;
 }
 
-function score(matches, ctx){
-  let s = 0;
-  for(const m of matches){
-    s += W_PARTNER * (Math.pow(ctx.partner[pk(m.t1[0], m.t1[1])] || 0, 2)
-                    + Math.pow(ctx.partner[pk(m.t2[0], m.t2[1])] || 0, 2));
-    for(const a of m.t1) for(const b of m.t2) s += W_OPP * (ctx.opp[pk(a, b)] || 0);
-    if(!ctx.cfg.ignoreRating){
-      s += W_RATING * Math.abs(m.t1[0].rating + m.t1[1].rating - m.t2[0].rating - m.t2[1].rating);
-    }
+/* Chênh lệch tổng rating giữa 2 đội của một trận */
+const gap = m => Math.abs(m.t1[0].rating + m.t1[1].rating - m.t2[0].rating - m.t2[1].rating);
+
+/* Điểm phạt của MỘT trận. Các trận trong cùng vòng không ảnh hưởng nhau
+   (mỗi người chỉ ở đúng một trận), nên tổng vòng = tổng điểm từng trận.
+   Nhờ vậy phần tinh chỉnh chỉ cần tính lại trận vừa đổi. */
+function mscore(m, ctx){
+  let s = W_PARTNER * (Math.pow(ctx.partner[pk(m.t1[0], m.t1[1])] || 0, 2)
+                     + Math.pow(ctx.partner[pk(m.t2[0], m.t2[1])] || 0, 2));
+  for(const a of m.t1) for(const b of m.t2) s += W_OPP * (ctx.opp[pk(a, b)] || 0);
+
+  if(!ctx.cfg.ignoreRating){
+    const d = gap(m);
+    s += W_RATING * d * d;                          // bình phương: lệch càng lớn càng bị phạt nặng
+    /* Vượt ngưỡng phải trả một bậc phạt cố định lớn hơn hẳn mọi khoản khác
+       (600 > 5 lần phạt trùng cặp), nên ngưỡng gần như là ràng buộc cứng.
+       Phần bình phương phía sau chỉ để khi bất khả thi thì vẫn chọn cái vượt ít nhất. */
+    const cap = ctx.cfg.maxGap;
+    if(cap > 0 && d > cap) s += W_OVERGAP * (1 + (d - cap) * (d - cap));
   }
   return s;
+}
+
+function score(matches, ctx){
+  let s = 0;
+  for(const m of matches) s += mscore(m, ctx);
+  return s;
+}
+
+/* Tinh chỉnh một vòng đã xáo: liên tục thử đổi chỗ 2 người, giữ lại nếu điểm phạt giảm.
+   Dừng khi không còn cải thiện được nữa. */
+function refine(matches, bench, ctx){
+  const mixed = ctx.cfg.mode === 'mixed';
+  const slots = [];
+  matches.forEach((m, mi) => slots.push(
+    { mi, t:'t1', i:0 }, { mi, t:'t1', i:1 }, { mi, t:'t2', i:0 }, { mi, t:'t2', i:1 }));
+
+  const ms = matches.map(m => mscore(m, ctx));
+  let total = ms.reduce((a, b) => a + b, 0);
+
+  for(let sweep = 0; sweep < SWEEPS; sweep++){
+    let improved = false;
+
+    /* đổi chỗ 2 người đang ở trên sân */
+    for(let a = 0; a < slots.length; a++){
+      for(let b = a + 1; b < slots.length; b++){
+        const A = slots[a], B = slots[b];
+        if(A.mi === B.mi && A.t === B.t) continue;   // cùng một đội -> đổi chỗ vô nghĩa
+        if(mixed && A.i !== B.i) continue;           // giữ cấu trúc 1 nam + 1 nữ mỗi đội
+
+        const pa = matches[A.mi][A.t][A.i], pb = matches[B.mi][B.t][B.i];
+        /* tách nam nữ: không được đưa nữ sang trận nam và ngược lại
+           (chế độ đôi nam nữ đã an toàn nhờ ràng buộc A.i === B.i ở trên) */
+        if(ctx.cfg.mode === 'split' && pa.gender !== pb.gender) continue;
+
+        const old = ms[A.mi] + (A.mi === B.mi ? 0 : ms[B.mi]);
+        matches[A.mi][A.t][A.i] = pb;
+        matches[B.mi][B.t][B.i] = pa;
+        const nA = mscore(matches[A.mi], ctx);
+        const nB = A.mi === B.mi ? 0 : mscore(matches[B.mi], ctx);
+
+        if(nA + nB < old - 1e-9){
+          ms[A.mi] = nA;
+          if(A.mi !== B.mi) ms[B.mi] = nB;
+          total += nA + nB - old;
+          improved = true;
+        }else{
+          matches[A.mi][A.t][A.i] = pa;
+          matches[B.mi][B.t][B.i] = pb;
+        }
+      }
+    }
+
+    /* thay bằng người đang nghỉ CÓ CÙNG mức ưu tiên (bằng số ván và bằng số vòng nghỉ)
+       -> mở rộng không gian tìm kiếm mà không hy sinh tính công bằng */
+    for(let a = 0; a < slots.length; a++){
+      const A = slots[a], pa = matches[A.mi][A.t][A.i];
+      for(let k = 0; k < bench.length; k++){
+        const pb = bench[k];
+        if(ctx.games[pb.id] !== ctx.games[pa.id]) continue;
+        if(ctx.rest[pb.id]  !== ctx.rest[pa.id])  continue;
+        /* chế độ tự do thì ai vào cũng được; hai chế độ kia phải đúng giới tính */
+        if(ctx.cfg.mode !== 'free' && pb.gender !== pa.gender) continue;
+
+        const old = ms[A.mi];
+        matches[A.mi][A.t][A.i] = pb;
+        const n = mscore(matches[A.mi], ctx);
+        if(n < old - 1e-9){
+          ms[A.mi] = n;
+          total += n - old;
+          bench[k] = pa;
+          improved = true;
+          break;
+        }
+        matches[A.mi][A.t][A.i] = pa;
+      }
+    }
+
+    if(!improved) break;
+  }
+  return total;
 }
 
 function shuffle(a){
@@ -37,37 +129,33 @@ function shuffle(a){
   return a;
 }
 
-/* 2C nam + 2C nữ -> C ván đôi nam nữ */
-function arrangeMixed(males, females, ctx){
+/* 2C nam + 2C nữ -> C trận đôi nam nữ. Xáo nhiều lần, mỗi lần tinh chỉnh, giữ lại phương án tốt nhất. */
+function arrangeMixed(males, females, bench, ctx){
   let best = null, bestS = Infinity;
-  for(let t = 0; t < TRIALS; t++){
+  for(let t = 0; t < SEEDS; t++){
     const M = shuffle(males.slice()), F = shuffle(females.slice()), ms = [];
     for(let c = 0; c * 2 < M.length; c++){
-      const m1 = M[2*c], m2 = M[2*c+1], f1 = F[2*c], f2 = F[2*c+1];
-      const A = { t1:[m1, f1], t2:[m2, f2] }, B = { t1:[m1, f2], t2:[m2, f1] };
-      ms.push(score([A], ctx) <= score([B], ctx) ? A : B);
+      ms.push({ t1:[M[2*c], F[2*c]], t2:[M[2*c+1], F[2*c+1]] });
     }
-    const s = score(ms, ctx);
+    const s = refine(ms, bench.slice(), ctx);
     if(s < bestS){ bestS = s; best = ms; }
   }
   return best || [];
 }
 
-/* nhóm bội số 4 (cùng giới hoặc tự do) -> các ván đôi */
-function arrangeGroups(group, ctx){
+/* các nhóm (mỗi nhóm bội số 4, cùng giới hoặc tự do) -> các trận đôi */
+function arrangeGroups(groups, bench, ctx){
   let best = null, bestS = Infinity;
-  for(let t = 0; t < TRIALS; t++){
-    const G = shuffle(group.slice()), ms = [];
-    for(let c = 0; c * 4 < G.length; c++){
-      const q = G.slice(c*4, c*4 + 4);
-      const opts = [
-        { t1:[q[0], q[1]], t2:[q[2], q[3]] },
-        { t1:[q[0], q[2]], t2:[q[1], q[3]] },
-        { t1:[q[0], q[3]], t2:[q[1], q[2]] },
-      ];
-      ms.push(opts.reduce((a, b) => score([b], ctx) < score([a], ctx) ? b : a));
-    }
-    const s = score(ms, ctx);
+  for(let t = 0; t < SEEDS; t++){
+    const ms = [];
+    groups.forEach(g => {
+      const G = shuffle(g.slice());
+      for(let c = 0; c * 4 < G.length; c++){
+        ms.push({ t1:[G[c*4], G[c*4+1]], t2:[G[c*4+2], G[c*4+3]] });
+      }
+    });
+    if(!ms.length) continue;
+    const s = refine(ms, bench.slice(), ctx);
     if(s < bestS){ bestS = s; best = ms; }
   }
   return best || [];
@@ -98,7 +186,8 @@ function buildRound(ctx){
     const F = pool.filter(p => p.gender === 'F').sort(prio);
     const c = Math.min(courts, M.length >> 1, F.length >> 1);
     if(c < 1) return null;
-    return arrangeMixed(M.slice(0, c*2), F.slice(0, c*2), ctx);
+    return arrangeMixed(M.slice(0, c*2), F.slice(0, c*2),
+                        M.slice(c*2).concat(F.slice(c*2)), ctx);
   }
   if(mode === 'split'){
     const M = pool.filter(p => p.gender === 'M').sort(prio);
@@ -106,12 +195,13 @@ function buildRound(ctx){
     const need = arr => arr.reduce((s, p) => s + Math.max(0, ctx.cfg.minGames - ctx.games[p.id]), 0);
     const { cm, cf } = allocate(courts, need(M), need(F), M.length >> 2, F.length >> 2);
     if(cm + cf < 1) return null;
-    return arrangeGroups(M.slice(0, cm*4), ctx).concat(arrangeGroups(F.slice(0, cf*4), ctx));
+    return arrangeGroups([M.slice(0, cm*4), F.slice(0, cf*4)],
+                         M.slice(cm*4).concat(F.slice(cf*4)), ctx);
   }
   const all = pool.slice().sort(prio);
   const c = Math.min(courts, all.length >> 2);
   if(c < 1) return null;
-  return arrangeGroups(all.slice(0, c*4), ctx);
+  return arrangeGroups([all.slice(0, c*4)], all.slice(c*4), ctx);
 }
 
 /* Ghi nhận 1 vòng vào ctx, trả về danh sách người nghỉ vòng đó */
@@ -139,7 +229,7 @@ function applyCap(list, cap, mode){
   return list.filter(p => keep.has(p));                 // giữ nguyên thứ tự danh sách
 }
 
-/* cfg = { mode, courts, minGames, maxGames, cap, ignoreRating } */
+/* cfg = { mode, courts, minGames, maxGames, cap, maxGap, ignoreRating } */
 function generate(activeList, cfg){
   const list = applyCap(activeList, Math.max(0, cfg.cap || 0), cfg.mode);
   const dropped = activeList.filter(p => list.indexOf(p) === -1);
@@ -227,7 +317,7 @@ function stats(h){
     y.win - x.win || y.diff - x.diff || x.p.name.localeCompare(y.p.name, 'vi'));
 }
 
-const API = { newId, pk, makeCtx, commit, applyCap, generate, toRounds, hydrate, stats };
+const API = { newId, pk, gap, makeCtx, commit, applyCap, generate, toRounds, hydrate, stats };
 if(typeof module !== 'undefined' && module.exports) module.exports = API;
 root.PB = API;
 

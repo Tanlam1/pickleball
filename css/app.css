@@ -159,6 +159,9 @@ td .ck{width:22px;height:22px;accent-color:var(--accent);display:block;margin:0 
 .match .mhead{display:flex;justify-content:space-between;align-items:center;gap:8px;
   font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
 .match .mstate.done{color:var(--ok)}
+.match .gap{opacity:.62;font-weight:600;margin-left:2px}
+.match .gap.over{opacity:1;color:var(--warn-fg);background:var(--warn-bg);
+  border:1px solid var(--warn-bd);border-radius:5px;padding:0 5px;margin-left:4px}
 .mteam{display:flex;align-items:center;gap:10px;padding:6px 0}
 .mteam .names{flex:1;font-size:14.5px;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

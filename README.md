@@ -28,7 +28,10 @@ Tạo được **nhiều buổi trận**, mỗi buổi có tên riêng (mặc đ
 | Số sân | bao nhiêu trận chạy song song mỗi vòng |
 | Ván tối thiểu / tối đa mỗi người | |
 | Số người tối đa | 0 = lấy hết |
+| **Lệch rating tối đa** | chênh lệch tổng rating giữa 2 đội mỗi trận, 0 = không giới hạn |
 | **Bỏ qua rating** | chia không quan tâm trình độ, và ẩn rating khỏi thẻ trận |
+
+Mỗi thẻ trận hiện sẵn mức lệch; trận nào vượt ngưỡng sẽ được tô màu cảnh báo.
 
 **Ghi kết quả:** chạm vào bất kỳ trận nào → mở bảng nhập điểm với nút +/− cỡ lớn.
 Điểm cao hơn tự được đánh dấu thắng, hoặc chạm thẳng vào một đội để chọn đội thắng.
@@ -38,9 +41,30 @@ xếp hạng theo số trận thắng.
 
 ## Thuật toán chia
 
-Mỗi vòng ưu tiên người **đánh ít ván nhất**, rồi **nghỉ lâu nhất**. Với nhóm đã chọn, app thử ~240 cách xáo
-rồi lấy phương án điểm phạt thấp nhất: trùng bạn cùng đội (phạt nặng), trùng đối thủ (phạt nhẹ),
-chênh lệch tổng rating 2 đội (bỏ qua nếu bật "Bỏ qua rating").
+Mỗi vòng ưu tiên người **đánh ít ván nhất**, rồi **nghỉ lâu nhất**.
+
+Với nhóm đã chọn, app xáo ngẫu nhiên 24 lần; **mỗi lần đều được tinh chỉnh** bằng cách liên tục thử đổi chỗ
+hai người và giữ lại nếu điểm phạt giảm, cho tới khi không cải thiện được nữa. Phép đổi chỗ gồm cả việc thay
+người trên sân bằng người đang nghỉ **có cùng số ván và cùng số vòng nghỉ** — mở rộng không gian tìm kiếm mà
+không hy sinh tính công bằng.
+
+Điểm phạt gồm: trùng bạn cùng đội (nặng, theo bình phương số lần), trùng đối thủ (nhẹ),
+lệch rating theo **bình phương**, cộng một bậc phạt lớn nếu vượt ngưỡng "lệch rating tối đa".
+
+### Đánh đổi cần biết
+
+Siết ngưỡng lệch càng chặt thì càng nhiều cặp phải đánh chung lại lần nữa. Đo trên nhóm 16 người, 2 sân:
+
+| Ngưỡng | Đôi nam nữ: lệch max / cặp trùng | Tách nam nữ: lệch max / cặp trùng |
+|---|---|---|
+| tắt (0) | 3.00 / 0 trên 32 cặp | 2.75 / 8 trên 24 cặp |
+| 1.5 | 1.50 / 0.4 | 1.50 / 11.5 |
+| **1.0** *(mặc định)* | **1.00 / 1.3** | 1.50 / 14.5 |
+| 0.5 | 1.25 / 4.1 | 1.25 / 14.7 |
+
+Mặc định 1.0 rất hợp với **đôi nam nữ**. Với **tách nam nữ** thì không gian lựa chọn hẹp hơn nhiều
+(chỉ ghép được trong cùng giới), nên 1.5–2.0 thường hợp lý hơn. App sẽ tự cảnh báo khi ngưỡng đang
+là nguyên nhân chính làm cặp trùng tăng.
 
 ## Cấu trúc
 

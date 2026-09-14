@@ -215,7 +215,9 @@ function renderMatches(){
   $('cMin').value           = s.cfg.minGames;
   $('cMax').value           = s.cfg.maxGames;
   $('cCap').value           = s.cfg.cap;
+  $('cMaxGap').value        = s.cfg.maxGap;
   $('cIgnoreRating').checked = s.cfg.ignoreRating;
+  $('cMaxGap').disabled      = s.cfg.ignoreRating;
   $('cfgSummary').textContent = `${MODE[s.cfg.mode]} · ${s.cfg.courts} sân · tối thiểu ${s.cfg.minGames} ván`;
 
   renderRounds();
@@ -270,9 +272,25 @@ function renderRounds(){
   const lo = Math.min.apply(null, gs), hi = Math.max.apply(null, gs);
   if(hi - lo >= 3)
     w.push(`Chênh lệch số ván khá lớn (${lo}–${hi}). Thường do lệch tỉ lệ nam/nữ ở chế độ đang chọn.`);
+  const pairs = Object.keys(H.ctx.partner).length;
   const dup = Object.keys(H.ctx.partner).filter(k => H.ctx.partner[k] > 1).length;
-  if(dup)
-    w.push(`Có ${dup} cặp phải đánh chung nhiều hơn 1 lần (không tránh được với số người hiện tại).`);
+  if(dup){
+    /* siết ngưỡng lệch rating luôn làm cặp trùng tăng — nói rõ để người dùng biết đường nới */
+    const capped = !s.cfg.ignoreRating && s.cfg.maxGap > 0 && dup > pairs / 3;
+    w.push(`Có ${dup}/${pairs} cặp phải đánh chung nhiều hơn 1 lần` + (capped
+      ? `. Phần lớn là do ngưỡng <b>lệch rating tối đa ${s.cfg.maxGap}</b> đang khá chặt — nới lên ${(s.cfg.maxGap + 0.5).toFixed(2)} hoặc đặt 0 sẽ có nhiều cặp khác nhau hơn.`
+      : ` (không tránh được với số người hiện tại).`));
+  }
+
+  if(!s.cfg.ignoreRating && s.cfg.maxGap > 0){
+    const over = [];
+    H.rounds.forEach((rd, ri) => rd.matches.forEach((m, ci) => {
+      const g = PB.gap(m);
+      if(g > s.cfg.maxGap + 1e-9) over.push(`vòng ${ri+1} sân ${ci+1} (lệch ${g.toFixed(2)})`);
+    }));
+    if(over.length)
+      w.push(`${over.length} trận lệch rating quá ${s.cfg.maxGap}: ${over.join(', ')}. Không tránh được vì những người còn lại trong vòng đó chênh nhau quá nhiều — nới ngưỡng lên hoặc thêm người trình độ trung bình.`);
+  }
   $('warnings').innerHTML = w.length
     ? `<div class="warn"><b>Lưu ý</b><ul><li>${w.join('</li><li>')}</li></ul></div>` : '';
 
@@ -286,9 +304,11 @@ function renderRounds(){
       </div>
       <div class="rounds-grid">${rd.matches.map((m, ci) => {
         const fin = m.win === 1 || m.win === 2;
+        const g   = PB.gap(m);
+        const over = s.cfg.maxGap > 0 && g > s.cfg.maxGap + 1e-9;
         return `<button class="match" data-r="${ri}" data-c="${ci}">
           <span class="mhead">
-            <span>Sân ${ci + 1}</span>
+            <span>Sân ${ci + 1}${rate ? ` <span class="gap${over ? ' over' : ''}">lệch ${g.toFixed(2)}</span>` : ''}</span>
             <span class="mstate ${fin ? 'done' : ''}">${fin ? '✓ Đã ghi' : 'Chạm để nhập điểm'}</span>
           </span>
           <span class="mteam ${m.win === 1 ? 'win' : ''}">
@@ -338,11 +358,13 @@ function readCfg(){
     minGames:     $('cMin').value,
     maxGames:     $('cMax').value,
     cap:          $('cCap').value,
+    maxGap:       $('cMaxGap').value,
     ignoreRating: $('cIgnoreRating').checked,
   });
+  $('cMaxGap').disabled = s.cfg.ignoreRating;
   $('cfgSummary').textContent = `${MODE[s.cfg.mode]} · ${s.cfg.courts} sân · tối thiểu ${s.cfg.minGames} ván`;
 }
-['cMode','cCourts','cMin','cMax','cCap','cIgnoreRating'].forEach(id =>
+['cMode','cCourts','cMin','cMax','cCap','cMaxGap','cIgnoreRating'].forEach(id =>
   $(id).addEventListener('change', () => { readCfg(); PBStore.save(); }));
 
 $('cRoster').onchange = () => {

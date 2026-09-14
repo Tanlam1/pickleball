@@ -53,6 +53,7 @@ function normCfg(c){
     minGames:     clamp(c.minGames, 1,  50, 4),
     maxGames:     clamp(c.maxGames, 0,  50, 0),
     cap:          clamp(c.cap,      0, 200, 0),
+    maxGap:       clamp(c.maxGap,   0,  10, 1),    // lệch tổng rating tối đa mỗi trận, 0 = không giới hạn
     ignoreRating: !!c.ignoreRating,
   };
 }

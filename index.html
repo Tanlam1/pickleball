@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pickleball Club</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #14181f;
+      --muted: #5b6472;
+      --accent: #0f766e;
+      --card: #f5f7f9;
+      --border: #e2e6ea;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #101418;
+        --fg: #e9edf2;
+        --muted: #9aa5b1;
+        --accent: #2dd4bf;
+        --card: #181e25;
+        --border: #262e37;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+    }
+
+    .wrap {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    header {
+      padding: 72px 0 56px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+
+    header .badge {
+      display: inline-block;
+      font-size: 13px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: clamp(32px, 6vw, 52px);
+      margin: 0 0 12px;
+      line-height: 1.15;
+    }
+
+    header p {
+      color: var(--muted);
+      font-size: 18px;
+      margin: 0 auto;
+      max-width: 560px;
+    }
+
+    .cta {
+      display: inline-block;
+      margin-top: 28px;
+      padding: 12px 26px;
+      background: var(--accent);
+      color: var(--bg);
+      text-decoration: none;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+
+    section { padding: 56px 0; }
+
+    h2 {
+      font-size: 24px;
+      margin: 0 0 24px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 17px;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 15px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 12px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th { color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+
+    .table-scroll { overflow-x: auto; }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 0 48px;
+      color: var(--muted);
+      font-size: 14px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="badge">CMC Pickleball</div>
+      <h1>Sân chơi Pickleball của chúng ta</h1>
+      <p>Lịch đánh, danh sách thành viên và thông tin giải đấu — tất cả ở một nơi.</p>
+      <a class="cta" href="#lich">Xem lịch tuần này</a>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section>
+      <h2>Thông tin chung</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Địa điểm</h3>
+          <p>Sân số 1 &amp; 2, Trung tâm thể thao CMC</p>
+        </div>
+        <div class="card">
+          <h3>Thời gian</h3>
+          <p>Thứ 3, 5, 7 hàng tuần — 18:00 đến 21:00</p>
+        </div>
+        <div class="card">
+          <h3>Liên hệ</h3>
+          <p>Nhắn nhóm chat nội bộ để đăng ký chỗ</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="lich">
+      <h2>Lịch tuần này</h2>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Ngày</th>
+              <th>Giờ</th>
+              <th>Sân</th>
+              <th>Ghi chú</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Thứ 3</td><td>18:00 – 21:00</td><td>Sân 1</td><td>Giao lưu tự do</td></tr>
+            <tr><td>Thứ 5</td><td>18:00 – 21:00</td><td>Sân 2</td><td>Tập kỹ thuật</td></tr>
+            <tr><td>Thứ 7</td><td>15:00 – 18:00</td><td>Sân 1 &amp; 2</td><td>Đánh đôi tính điểm</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      Trang được host miễn phí trên GitHub Pages.
+    </div>
+  </footer>
+</body>
+</html>

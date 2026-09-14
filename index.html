@@ -4,91 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Chia trận Pickleball</title>
-<style>
-:root{
-  --bg:#f7f8fa; --panel:#ffffff; --fg:#161b22; --muted:#5f6b7a;
-  --border:#e3e7ec; --accent:#0f766e; --accent-fg:#ffffff;
-  --male:#2563eb; --female:#db2777; --warn-bg:#fff7ed; --warn-fg:#9a3412; --warn-bd:#fed7aa;
-  --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.1);
-}
-@media (prefers-color-scheme:dark){
-  :root{
-    --bg:#0f1317; --panel:#171d23; --fg:#e6ebf1; --muted:#94a1b0;
-    --border:#262f39; --accent:#2dd4bf; --accent-fg:#06231f;
-    --male:#60a5fa; --female:#f472b6; --warn-bg:#2a1c0f; --warn-fg:#fbbf24; --warn-bd:#5b3c12;
-    --shadow:none;
-  }
-}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);
-  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.55}
-.wrap{max-width:1080px;margin:0 auto;padding:24px 18px 64px}
-h1{font-size:26px;margin:0 0 4px}
-.sub{color:var(--muted);margin:0 0 26px;font-size:14px}
-h2{font-size:17px;margin:0 0 14px;display:flex;align-items:center;gap:8px}
-h2 .n{width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--accent-fg);
-  font-size:12px;display:grid;place-items:center;font-weight:700;flex:none}
-.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;
-  padding:18px;margin-bottom:18px;box-shadow:var(--shadow)}
-label{display:block;font-size:12px;font-weight:600;color:var(--muted);
-  text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
-input,select,textarea,button{font:inherit;color:inherit}
-input[type=text],input[type=number],select,textarea{
-  width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);
-  border-radius:8px;outline:none}
-input:focus,select:focus,textarea:focus{border-color:var(--accent)}
-textarea{resize:vertical;min-height:88px;font-family:ui-monospace,Consolas,monospace;font-size:13px}
-button{cursor:pointer;border:1px solid var(--border);background:var(--panel);
-  padding:8px 14px;border-radius:8px;font-weight:600}
-button:hover{border-color:var(--accent)}
-button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
-button.primary:hover{filter:brightness(1.08)}
-button.ghost{background:transparent;color:var(--muted);padding:4px 8px;font-size:13px;font-weight:500}
-button.ghost:hover{color:#dc2626;border-color:#dc2626}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
-.row>*{flex:1 1 140px;min-width:0}
-.row .narrow{flex:0 0 110px}
-.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
-table{width:100%;border-collapse:collapse}
-.tscroll{overflow-x:auto;margin:0 -4px}
-th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
-  text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);font-weight:600}
-td{padding:5px 8px;border-bottom:1px solid var(--border);vertical-align:middle}
-tbody tr:last-child td{border-bottom:none}
-td input,td select{padding:5px 8px}
-.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:700}
-.tag.m{background:color-mix(in srgb,var(--male) 16%,transparent);color:var(--male)}
-.tag.f{background:color-mix(in srgb,var(--female) 16%,transparent);color:var(--female)}
-.hint{font-size:13px;color:var(--muted);margin:10px 0 0}
-.warn{background:var(--warn-bg);color:var(--warn-fg);border:1px solid var(--warn-bd);
-  border-radius:8px;padding:10px 12px;font-size:13.5px;margin-bottom:14px}
-.warn ul{margin:6px 0 0;padding-left:18px}
-.round{border:1px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden}
-.round>header{background:var(--bg);padding:8px 14px;font-weight:700;font-size:14px;
-  display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--border)}
-.round>header .rest{font-weight:500;color:var(--muted);font-size:13px}
-.courts{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1px;background:var(--border)}
-.court{background:var(--panel);padding:12px 14px}
-.court .cname{font-size:11px;text-transform:uppercase;letter-spacing:.06em;
-  color:var(--muted);font-weight:700;margin-bottom:8px}
-.vs{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center}
-.team{display:flex;flex-direction:column;gap:2px;font-size:14px;min-width:0}
-.team .p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.team .p b{font-weight:600}
-.team .sum{font-size:11px;color:var(--muted);margin-top:2px}
-.vs .mid{font-size:11px;font-weight:700;color:var(--muted)}
-.dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;vertical-align:middle}
-.dot.m{background:var(--male)}.dot.f{background:var(--female)}
-.empty{color:var(--muted);font-size:14px;text-align:center;padding:26px 0}
-.stats td:nth-child(n+4),.stats th:nth-child(n+4){text-align:center}
-.bad{color:#dc2626;font-weight:700}
-@media print{
-  body{background:#fff}
-  .noprint{display:none!important}
-  .panel{border:none;box-shadow:none;padding:0}
-  .round{break-inside:avoid}
-}
-</style>
+<link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 <div class="wrap">
@@ -96,17 +12,30 @@ td input,td select{padding:5px 8px}
 <h1>Chia trận Pickleball</h1>
 <p class="sub">Xếp lịch đánh theo số sân, đảm bảo số ván tối thiểu cho mỗi người, hạn chế trùng cặp và cân bằng trình độ.</p>
 
+<!-- ĐỒNG BỘ -->
+<section class="panel sync noprint" id="syncPanel">
+  <div class="grow">
+    <label>Mã phòng chung</label>
+    <input type="text" id="roomId" placeholder="vd: cmc-pickleball" autocomplete="off" spellcheck="false">
+  </div>
+  <div class="auto"><button class="primary" id="btnJoin">Kết nối</button></div>
+  <div class="auto"><button id="btnShare" style="display:none">Copy link mời</button></div>
+  <div class="auto"><button id="btnLeave" style="display:none">Ngắt</button></div>
+  <div class="status"><span class="led" id="led"></span><span id="statusText"></span></div>
+</section>
+
 <!-- 1. NGƯỜI CHƠI -->
 <section class="panel noprint">
-  <h2><span class="n">1</span> Người chơi <span id="pcount" style="color:var(--muted);font-weight:500;font-size:13px"></span></h2>
+  <h2><span class="n">1</span> Người chơi <span class="note" id="pcount"></span></h2>
 
   <div class="row">
-    <div style="flex:2 1 200px"><label>Tên</label><input type="text" id="fName" placeholder="Nguyễn Văn A"></div>
+    <div style="flex:2 1 200px"><label>Tên</label>
+      <input type="text" id="fName" placeholder="Nguyễn Văn A" autocomplete="off"></div>
     <div class="narrow"><label>Giới tính</label>
       <select id="fGender"><option value="M">Nam</option><option value="F">Nữ</option></select></div>
     <div class="narrow"><label>Rating</label>
       <input type="number" id="fRating" value="3.5" step="0.25" min="1" max="8"></div>
-    <div class="narrow" style="flex:0 0 auto"><button class="primary" id="btnAdd">Thêm</button></div>
+    <div class="auto"><button class="primary" id="btnAdd">Thêm</button></div>
   </div>
 
   <div class="tscroll" style="margin-top:16px"><table>
@@ -129,8 +58,10 @@ td input,td select{padding:5px 8px}
   <div id="bulkBox" style="display:none;margin-top:14px">
     <label>Mỗi dòng một người: <code>Tên, Nam/Nữ, Rating</code></label>
     <textarea id="bulkText" placeholder="Minh, Nam, 4.0&#10;Lan, Nữ, 3.25&#10;Hùng, Nam, 3.5"></textarea>
-    <div class="actions"><button class="primary" id="btnBulkGo">Nhập</button>
-      <button id="btnBulkCancel">Huỷ</button></div>
+    <div class="actions">
+      <button class="primary" id="btnBulkGo">Nhập</button>
+      <button id="btnBulkCancel">Huỷ</button>
+    </div>
   </div>
 </section>
 
@@ -143,15 +74,18 @@ td input,td select{padding:5px 8px}
       <option value="split">Tách nam nữ (đôi nam riêng, đôi nữ riêng)</option>
       <option value="free">Ngẫu nhiên tự do</option>
     </select></div>
-    <div class="narrow"><label>Số sân</label><input type="number" id="cCourts" value="2" min="1" max="20"></div>
-    <div class="narrow"><label>Ván tối thiểu<br>mỗi người</label><input type="number" id="cMin" value="4" min="1" max="50"></div>
-    <div class="narrow"><label>Ván tối đa<br>(0 = không giới hạn)</label><input type="number" id="cMax" value="0" min="0" max="50"></div>
-    <div class="narrow"><label>Số người tối đa<br>(0 = tất cả)</label><input type="number" id="cCap" value="0" min="0" max="200"></div>
+    <div class="narrow"><label>Số sân</label>
+      <input type="number" id="cCourts" value="2" min="1" max="20"></div>
+    <div class="narrow"><label>Ván tối thiểu<br>mỗi người</label>
+      <input type="number" id="cMin" value="4" min="1" max="50"></div>
+    <div class="narrow"><label>Ván tối đa<br>(0 = không giới hạn)</label>
+      <input type="number" id="cMax" value="0" min="0" max="50"></div>
+    <div class="narrow"><label>Số người tối đa<br>(0 = tất cả)</label>
+      <input type="number" id="cCap" value="0" min="0" max="200"></div>
   </div>
   <div style="margin-top:12px">
-    <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;font-weight:500;color:var(--fg)">
-      <input type="checkbox" id="cBalance" checked style="width:auto"> Cân bằng trình độ giữa 2 đội trong mỗi ván
-    </label>
+    <label class="check"><input type="checkbox" id="cBalance" checked>
+      Cân bằng trình độ giữa 2 đội trong mỗi ván</label>
   </div>
   <div class="actions">
     <button class="primary" id="btnGen">Tạo lịch</button>
@@ -161,14 +95,16 @@ td input,td select{padding:5px 8px}
 
 <!-- 3. KẾT QUẢ -->
 <section class="panel" id="resultPanel" style="display:none">
-  <h2><span class="n">3</span> Lịch thi đấu <span id="summary" style="color:var(--muted);font-weight:500;font-size:13px"></span></h2>
+  <h2><span class="n">3</span> Lịch thi đấu <span class="note" id="summary"></span></h2>
   <div id="warnings"></div>
   <div id="rounds"></div>
 
   <h2 style="margin-top:26px">Thống kê</h2>
   <div class="tscroll"><table class="stats">
-    <thead><tr><th>Tên</th><th style="width:70px">GT</th><th style="width:80px">Rating</th>
-      <th style="width:70px">Số ván</th><th style="width:70px">Nghỉ</th><th style="width:110px">Bạn cùng đội</th></tr></thead>
+    <thead><tr>
+      <th>Tên</th><th style="width:70px">GT</th><th style="width:80px">Rating</th>
+      <th style="width:70px">Số ván</th><th style="width:70px">Nghỉ</th><th style="width:110px">Bạn cùng đội</th>
+    </tr></thead>
     <tbody id="statsBody"></tbody>
   </table></div>
 
@@ -179,377 +115,11 @@ td input,td select{padding:5px 8px}
 </section>
 
 </div>
-<script>
-/* ============================ STATE ============================ */
-const LS = 'pb_scheduler_v1';
-let players = [];
-let schedule = null;
-let uid = 1;
+<div id="toast"></div>
 
-const $ = id => document.getElementById(id);
-const SAMPLE = [
-  ['Minh','M',4.25],['Tuấn','M',3.75],['Hùng','M',3.5],['Nam','M',4.0],
-  ['Dũng','M',3.25],['Khoa','M',3.5],['Phong','M',4.5],
-  ['Lan','F',3.5],['Hoa','F',3.0],['Mai','F',3.75],['Thu','F',3.25],
-  ['Linh','F',4.0],['Trang','F',3.0],['Ngọc','F',3.5],
-];
-
-/* ============================ PERSIST ============================ */
-function save(){
-  localStorage.setItem(LS, JSON.stringify({
-    players,
-    cfg:{ mode:$('cMode').value, courts:$('cCourts').value, min:$('cMin').value,
-          max:$('cMax').value, cap:$('cCap').value, balance:$('cBalance').checked }
-  }));
-}
-function load(){
-  try{
-    const d = JSON.parse(localStorage.getItem(LS) || 'null');
-    if(!d) return;
-    players = d.players || [];
-    players.forEach(p => { uid = Math.max(uid, p.id + 1); });
-    if(d.cfg){
-      $('cMode').value = d.cfg.mode; $('cCourts').value = d.cfg.courts;
-      $('cMin').value = d.cfg.min; $('cMax').value = d.cfg.max;
-      $('cCap').value = d.cfg.cap ?? 0; $('cBalance').checked = d.cfg.balance;
-    }
-  }catch(e){}
-}
-
-/* ============================ PLAYER UI ============================ */
-function addPlayer(name, gender, rating){
-  name = String(name || '').trim();
-  if(!name) return false;
-  const r = parseFloat(rating);
-  players.push({ id: uid++, name, gender: gender === 'F' ? 'F' : 'M',
-                 rating: isNaN(r) ? 3.5 : Math.min(8, Math.max(1, r)), active: true });
-  return true;
-}
-function renderPlayers(){
-  const tb = $('plist');
-  tb.innerHTML = '';
-  players.forEach((p, i) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><input type="checkbox" data-k="active" data-i="${i}" ${p.active?'checked':''} style="width:auto"></td>
-      <td><input type="text" data-k="name" data-i="${i}" value="${esc(p.name)}"></td>
-      <td><select data-k="gender" data-i="${i}">
-        <option value="M"${p.gender==='M'?' selected':''}>Nam</option>
-        <option value="F"${p.gender==='F'?' selected':''}>Nữ</option></select></td>
-      <td><input type="number" data-k="rating" data-i="${i}" value="${p.rating}" step="0.25" min="1" max="8"></td>
-      <td><button class="ghost" data-del="${i}">Xoá</button></td>`;
-    tb.appendChild(tr);
-  });
-  $('pempty').style.display = players.length ? 'none' : 'block';
-  const a = players.filter(p => p.active);
-  $('pcount').textContent = players.length
-    ? `— ${a.length}/${players.length} tham gia · ${a.filter(p=>p.gender==='M').length} nam, ${a.filter(p=>p.gender==='F').length} nữ`
-    : '';
-  save();
-}
-const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-
-$('plist').addEventListener('input', e => {
-  const t = e.target, i = t.dataset.i, k = t.dataset.k;
-  if(i === undefined || !k) return;
-  if(k === 'active') players[i].active = t.checked;
-  else if(k === 'rating') players[i].rating = parseFloat(t.value) || 0;
-  else players[i][k] = t.value;
-  if(k === 'active' || k === 'gender') renderPlayers(); else save();
-});
-$('plist').addEventListener('change', e => {
-  if(e.target.dataset.k === 'gender'){ players[e.target.dataset.i].gender = e.target.value; renderPlayers(); }
-});
-$('plist').addEventListener('click', e => {
-  const d = e.target.dataset.del;
-  if(d !== undefined){ players.splice(+d, 1); renderPlayers(); }
-});
-
-$('btnAdd').onclick = () => {
-  if(addPlayer($('fName').value, $('fGender').value, $('fRating').value)){
-    $('fName').value = ''; $('fName').focus(); renderPlayers();
-  }
-};
-$('fName').addEventListener('keydown', e => { if(e.key === 'Enter') $('btnAdd').click(); });
-$('btnAll').onclick  = () => { players.forEach(p => p.active = true);  renderPlayers(); };
-$('btnNone').onclick = () => { players.forEach(p => p.active = false); renderPlayers(); };
-$('btnSample').onclick = () => {
-  if(players.length && !confirm('Thay danh sách hiện tại bằng 14 người mẫu?')) return;
-  players = []; SAMPLE.forEach(s => addPlayer(s[0], s[1], s[2])); renderPlayers();
-};
-$('btnClear').onclick = () => { if(confirm('Xoá toàn bộ người chơi?')){ players = []; renderPlayers(); } };
-$('btnBulk').onclick = () => { $('bulkBox').style.display = 'block'; $('bulkText').focus(); };
-$('btnBulkCancel').onclick = () => { $('bulkBox').style.display = 'none'; };
-$('btnBulkGo').onclick = () => {
-  let n = 0;
-  $('bulkText').value.split('\n').forEach(line => {
-    const c = line.split(/[,\t;]/).map(s => s.trim());
-    if(!c[0]) return;
-    const g = /^(n[ữu]|f|female|w)$/i.test(c[1] || '') ? 'F' : 'M';
-    if(addPlayer(c[0], g, c[2])) n++;
-  });
-  $('bulkText').value = ''; $('bulkBox').style.display = 'none';
-  renderPlayers();
-  if(!n) alert('Không đọc được dòng nào.');
-};
-
-/* ============================ SCHEDULER ============================ */
-const pk = (a,b) => a.id < b.id ? a.id+'|'+b.id : b.id+'|'+a.id;
-const W_PARTNER = 120, W_OPP = 22, W_RATING = 10;
-
-function makeCtx(list, cfg){
-  const c = { players:list, cfg, games:{}, rest:{}, partner:{}, opp:{} };
-  list.forEach(p => { c.games[p.id] = 0; c.rest[p.id] = 0; });
-  return c;
-}
-function score(matches, ctx){
-  let s = 0;
-  for(const m of matches){
-    s += W_PARTNER * (Math.pow(ctx.partner[pk(m.t1[0],m.t1[1])]||0, 2)
-                    + Math.pow(ctx.partner[pk(m.t2[0],m.t2[1])]||0, 2));
-    for(const a of m.t1) for(const b of m.t2) s += W_OPP * (ctx.opp[pk(a,b)] || 0);
-    if(ctx.cfg.balance){
-      const d = Math.abs(m.t1[0].rating + m.t1[1].rating - m.t2[0].rating - m.t2[1].rating);
-      s += W_RATING * d;
-    }
-  }
-  return s;
-}
-function shuffle(a){
-  for(let i = a.length - 1; i > 0; i--){ const j = (Math.random()*(i+1))|0; [a[i],a[j]] = [a[j],a[i]]; }
-  return a;
-}
-/* 2C nam + 2C nữ -> C ván đôi nam nữ */
-function arrangeMixed(males, females, ctx, trials){
-  let best = null, bestS = Infinity;
-  for(let t = 0; t < trials; t++){
-    const M = shuffle(males.slice()), F = shuffle(females.slice()), ms = [];
-    for(let c = 0; c * 2 < M.length; c++){
-      const m1 = M[2*c], m2 = M[2*c+1], f1 = F[2*c], f2 = F[2*c+1];
-      const A = { t1:[m1,f1], t2:[m2,f2] }, B = { t1:[m1,f2], t2:[m2,f1] };
-      ms.push(score([A], ctx) <= score([B], ctx) ? A : B);
-    }
-    const s = score(ms, ctx);
-    if(s < bestS){ bestS = s; best = ms; }
-  }
-  return best || [];
-}
-/* nhóm bội số 4 (cùng giới hoặc tự do) -> các ván đôi */
-function arrangeGroups(group, ctx, trials){
-  let best = null, bestS = Infinity;
-  for(let t = 0; t < trials; t++){
-    const G = shuffle(group.slice()), ms = [];
-    for(let c = 0; c * 4 < G.length; c++){
-      const q = G.slice(c*4, c*4+4);
-      const opts = [
-        { t1:[q[0],q[1]], t2:[q[2],q[3]] },
-        { t1:[q[0],q[2]], t2:[q[1],q[3]] },
-        { t1:[q[0],q[3]], t2:[q[1],q[2]] },
-      ];
-      ms.push(opts.reduce((a,b) => score([b],ctx) < score([a],ctx) ? b : a));
-    }
-    const s = score(ms, ctx);
-    if(s < bestS){ bestS = s; best = ms; }
-  }
-  return best || [];
-}
-function allocate(courts, defM, defF, availM, availF){
-  let cm = 0, cf = 0;
-  for(let i = 0; i < courts; i++){
-    const sM = cm < availM ? defM / (cm + 1) : -1;
-    const sF = cf < availF ? defF / (cf + 1) : -1;
-    if(sM < 0 && sF < 0) break;
-    if(sM >= sF) cm++; else cf++;
-  }
-  return { cm, cf };
-}
-function buildRound(ctx){
-  const { mode, courts, maxGames, balance } = ctx.cfg;
-  const trials = 240;
-  const pool = ctx.players.filter(p => !maxGames || ctx.games[p.id] < maxGames);
-  pool.forEach(p => p._r = Math.random());
-  const prio = (a,b) => (ctx.games[a.id] - ctx.games[b.id])
-                     || (ctx.rest[b.id] - ctx.rest[a.id]) || (a._r - b._r);
-
-  if(mode === 'mixed'){
-    const M = pool.filter(p => p.gender === 'M').sort(prio);
-    const F = pool.filter(p => p.gender === 'F').sort(prio);
-    const c = Math.min(courts, M.length >> 1, F.length >> 1);
-    if(c < 1) return null;
-    return arrangeMixed(M.slice(0, c*2), F.slice(0, c*2), ctx, trials);
-  }
-  if(mode === 'split'){
-    const M = pool.filter(p => p.gender === 'M').sort(prio);
-    const F = pool.filter(p => p.gender === 'F').sort(prio);
-    const need = arr => arr.reduce((s,p) => s + Math.max(0, ctx.cfg.minGames - ctx.games[p.id]), 0);
-    const { cm, cf } = allocate(courts, need(M), need(F), M.length >> 2, F.length >> 2);
-    if(cm + cf < 1) return null;
-    return arrangeGroups(M.slice(0, cm*4), ctx, trials)
-      .concat(arrangeGroups(F.slice(0, cf*4), ctx, trials));
-  }
-  const all = pool.slice().sort(prio);
-  const c = Math.min(courts, all.length >> 2);
-  if(c < 1) return null;
-  return arrangeGroups(all.slice(0, c*4), ctx, trials);
-}
-function commit(matches, ctx){
-  const playing = new Set();
-  for(const m of matches){
-    [...m.t1, ...m.t2].forEach(p => { playing.add(p.id); ctx.games[p.id]++; ctx.rest[p.id] = 0; });
-    const k1 = pk(m.t1[0],m.t1[1]), k2 = pk(m.t2[0],m.t2[1]);
-    ctx.partner[k1] = (ctx.partner[k1]||0)+1;
-    ctx.partner[k2] = (ctx.partner[k2]||0)+1;
-    for(const a of m.t1) for(const b of m.t2){ const k = pk(a,b); ctx.opp[k] = (ctx.opp[k]||0)+1; }
-  }
-  return ctx.players.filter(p => !playing.has(p.id)).map(p => { ctx.rest[p.id]++; return p; });
-}
-/* Giới hạn số người: chế độ đôi nam nữ cắt cân bằng 2 giới, tránh lấy trúng toàn nam/toàn nữ */
-function applyCap(list, cap, mode){
-  if(!cap || list.length <= cap) return list;
-  if(mode !== 'mixed') return list.slice(0, cap);
-  const M = list.filter(p => p.gender === 'M'), F = list.filter(p => p.gender === 'F');
-  let nm = Math.min(M.length, Math.floor(cap / 2));
-  let nf = Math.min(F.length, cap - nm);
-  nm = Math.min(M.length, cap - nf);                       // bên nào thiếu thì bên kia bù
-  const keep = new Set([...M.slice(0, nm), ...F.slice(0, nf)]);
-  return list.filter(p => keep.has(p));                    // giữ nguyên thứ tự danh sách
-}
-function generate(){
-  const cfg = {
-    mode: $('cMode').value,
-    courts: Math.max(1, +$('cCourts').value || 1),
-    minGames: Math.max(1, +$('cMin').value || 1),
-    maxGames: Math.max(0, +$('cMax').value || 0),
-    balance: $('cBalance').checked,
-  };
-  const all = players.filter(p => p.active);
-  const list = applyCap(all, Math.max(0, +$('cCap').value || 0), cfg.mode);
-  const dropped = all.filter(p => !list.includes(p));
-
-  if(list.length < 4) return { error:'Cần ít nhất 4 người tham gia.' };
-  if(cfg.mode === 'mixed'){
-    const m = list.filter(p => p.gender === 'M').length, f = list.length - m;
-    if(m < 2 || f < 2) return { error:'Chế độ đôi nam nữ cần tối thiểu 2 nam và 2 nữ.' };
-  }
-  if(cfg.mode === 'split'){
-    const m = list.filter(p => p.gender === 'M').length, f = list.length - m;
-    if(m < 4 && f < 4) return { error:'Chế độ tách nam nữ cần ít nhất 4 nam hoặc 4 nữ.' };
-  }
-
-  const ctx = makeCtx(list, cfg);
-  const rounds = [];
-  let stall = 0;
-  while(rounds.length < 200){
-    const needy = list.filter(p => ctx.games[p.id] < cfg.minGames);
-    if(!needy.length) break;
-    const matches = buildRound(ctx);
-    if(!matches || !matches.length) break;
-    const before = needy.filter(p => ctx.games[p.id] < cfg.minGames).map(p => p.id);
-    const resting = commit(matches, ctx);
-    const progressed = before.some(id => ctx.games[id] > 0 && !resting.find(r => r.id === id));
-    rounds.push({ matches, resting });
-    stall = progressed ? 0 : stall + 1;
-    if(stall >= 3) break;
-  }
-  return { ctx, rounds, cfg, list, dropped };
-}
-
-/* ============================ RENDER ============================ */
-const pName = p => `<span class="p"><span class="dot ${p.gender==='M'?'m':'f'}"></span><b>${esc(p.name)}</b> <span style="color:var(--muted);font-size:12px">${p.rating.toFixed(2)}</span></span>`;
-
-function renderSchedule(res){
-  $('resultPanel').style.display = 'block';
-  if(res.error){
-    $('warnings').innerHTML = `<div class="warn">${esc(res.error)}</div>`;
-    $('rounds').innerHTML = ''; $('statsBody').innerHTML = ''; $('summary').textContent = '';
-    return;
-  }
-  const { ctx, rounds, cfg, list, dropped } = res;
-  schedule = res;
-
-  $('summary').textContent = `— ${rounds.length} vòng · ${rounds.reduce((s,r)=>s+r.matches.length,0)} ván · ${list.length} người · ${cfg.courts} sân`;
-
-  /* cảnh báo */
-  const w = [];
-  if(dropped.length) w.push(`Giới hạn còn ${list.length} người — không xếp lịch cho: <b>${dropped.map(p=>esc(p.name)).join(', ')}</b>.`);
-  const short = list.filter(p => ctx.games[p.id] < cfg.minGames);
-  if(short.length) w.push(`Không đủ ${cfg.minGames} ván cho: <b>${short.map(p=>esc(p.name)+' ('+ctx.games[p.id]+')').join(', ')}</b>. Thử tăng số sân, giảm ván tối thiểu, hoặc bỏ giới hạn ván tối đa.`);
-  const gs = list.map(p => ctx.games[p.id]);
-  const lo = Math.min(...gs), hi = Math.max(...gs);
-  if(hi - lo >= 3) w.push(`Chênh lệch số ván khá lớn (${lo}–${hi} ván). Thường do lệch tỉ lệ nam/nữ ở chế độ đang chọn.`);
-  const dup = Object.values(ctx.partner).filter(v => v > 1).length;
-  if(dup) w.push(`Có ${dup} cặp phải đánh chung nhiều hơn 1 lần (không tránh được với số người hiện tại).`);
-  $('warnings').innerHTML = w.length ? `<div class="warn"><b>Lưu ý</b><ul><li>${w.join('</li><li>')}</li></ul></div>` : '';
-
-  /* các vòng */
-  $('rounds').innerHTML = rounds.map((r, i) => `
-    <div class="round">
-      <header><span>Vòng ${i+1}</span>
-        <span class="rest">${r.resting.length ? 'Nghỉ: ' + r.resting.map(p=>esc(p.name)).join(', ') : 'Tất cả đều ra sân'}</span>
-      </header>
-      <div class="courts">${r.matches.map((m, c) => `
-        <div class="court">
-          <div class="cname">Sân ${c+1}</div>
-          <div class="vs">
-            <div class="team">${pName(m.t1[0])}${pName(m.t1[1])}
-              <span class="sum">Tổng ${(m.t1[0].rating+m.t1[1].rating).toFixed(2)}</span></div>
-            <div class="mid">VS</div>
-            <div class="team">${pName(m.t2[0])}${pName(m.t2[1])}
-              <span class="sum">Tổng ${(m.t2[0].rating+m.t2[1].rating).toFixed(2)}</span></div>
-          </div>
-        </div>`).join('')}</div>
-    </div>`).join('');
-
-  /* thống kê */
-  $('statsBody').innerHTML = list.slice()
-    .sort((a,b) => ctx.games[a.id] - ctx.games[b.id] || a.name.localeCompare(b.name,'vi'))
-    .map(p => {
-      const mates = new Set();
-      Object.keys(ctx.partner).forEach(k => {
-        const [x,y] = k.split('|').map(Number);
-        if(x === p.id) mates.add(y); else if(y === p.id) mates.add(x);
-      });
-      const g = ctx.games[p.id];
-      return `<tr>
-        <td>${esc(p.name)}</td>
-        <td><span class="tag ${p.gender==='M'?'m':'f'}">${p.gender==='M'?'Nam':'Nữ'}</span></td>
-        <td>${p.rating.toFixed(2)}</td>
-        <td${g < cfg.minGames ? ' class="bad"' : ''}>${g}</td>
-        <td>${rounds.length - g}</td>
-        <td>${mates.size}</td></tr>`;
-    }).join('');
-}
-
-function asText(){
-  if(!schedule || schedule.error) return '';
-  const modeName = { mixed:'Đôi nam nữ', split:'Tách nam nữ', free:'Ngẫu nhiên' }[schedule.cfg.mode];
-  let out = `LỊCH ĐÁNH PICKLEBALL — ${modeName}\n${schedule.list.length} người · ${schedule.cfg.courts} sân · ${schedule.rounds.length} vòng\n`;
-  schedule.rounds.forEach((r, i) => {
-    out += `\n--- VÒNG ${i+1} ---\n`;
-    r.matches.forEach((m, c) => {
-      out += `Sân ${c+1}: ${m.t1[0].name} & ${m.t1[1].name}  vs  ${m.t2[0].name} & ${m.t2[1].name}\n`;
-    });
-    if(r.resting.length) out += `Nghỉ: ${r.resting.map(p=>p.name).join(', ')}\n`;
-  });
-  return out;
-}
-
-/* ============================ EVENTS ============================ */
-function run(){ save(); renderSchedule(generate()); $('resultPanel').scrollIntoView({behavior:'smooth',block:'start'}); }
-$('btnGen').onclick = run;
-$('btnRegen').onclick = run;
-$('btnPrint').onclick = () => window.print();
-$('btnCopy').onclick = async () => {
-  const t = asText(); if(!t) return;
-  try{ await navigator.clipboard.writeText(t); $('btnCopy').textContent = 'Đã copy!';
-       setTimeout(() => $('btnCopy').textContent = 'Copy dạng text', 1600); }
-  catch(e){ prompt('Copy thủ công:', t); }
-};
-['cMode','cCourts','cMin','cMax','cCap','cBalance'].forEach(id => $(id).addEventListener('change', save));
-
-load();
-if(!players.length) SAMPLE.forEach(s => addPlayer(s[0], s[1], s[2]));
-renderPlayers();
-</script>
+<script src="js/firebase-config.js"></script>
+<script src="js/scheduler.js"></script>
+<script src="js/sync.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
